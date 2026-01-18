@@ -1,3 +1,6 @@
 # Ignore AI/planning directory contents
 .ai/plans/
 .ai/*.md
+
+# Ignore built binary
+arbor
