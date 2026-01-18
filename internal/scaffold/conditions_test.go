@@ -159,6 +159,19 @@ func TestConditionEvaluator_Evaluate(t *testing.T) {
 		assert.True(t, result)
 	})
 
+	t.Run("env_file_contains - key exists but is empty", func(t *testing.T) {
+		os.WriteFile(filepath.Join(tmpDir, ".env"), []byte("DB_CONNECTION=\nAPP_KEY=base64:value\n"), 0644)
+
+		result, err := evaluator.Evaluate(map[string]interface{}{
+			"env_file_contains": map[string]interface{}{
+				"file": ".env",
+				"key":  "DB_CONNECTION",
+			},
+		})
+		assert.NoError(t, err)
+		assert.False(t, result, "Empty value should not be considered as containing the key")
+	})
+
 	t.Run("env_file_contains - key does not exist in .env file", func(t *testing.T) {
 		os.WriteFile(filepath.Join(tmpDir, ".env"), []byte("APP_KEY=base64:value\n"), 0644)
 
@@ -191,6 +204,66 @@ func TestConditionEvaluator_Evaluate(t *testing.T) {
 		})
 		assert.NoError(t, err)
 		assert.True(t, result)
+	})
+
+	t.Run("env_file_not_exists - .env file does not exist", func(t *testing.T) {
+		result, err := evaluator.Evaluate(map[string]interface{}{
+			"env_file_not_exists": map[string]interface{}{
+				"file": ".env",
+				"key":  "APP_KEY",
+			},
+		})
+		assert.NoError(t, err)
+		assert.True(t, result)
+	})
+
+	t.Run("env_file_not_exists - key does not exist", func(t *testing.T) {
+		os.WriteFile(filepath.Join(tmpDir, ".env"), []byte("APP_KEY=base64:value\n"), 0644)
+
+		result, err := evaluator.Evaluate(map[string]interface{}{
+			"env_file_not_exists": map[string]interface{}{
+				"file": ".env",
+				"key":  "DB_CONNECTION",
+			},
+		})
+		assert.NoError(t, err)
+		assert.True(t, result)
+	})
+
+	t.Run("env_file_not_exists - key exists but is empty", func(t *testing.T) {
+		os.WriteFile(filepath.Join(tmpDir, ".env"), []byte("APP_KEY=\n"), 0644)
+
+		result, err := evaluator.Evaluate(map[string]interface{}{
+			"env_file_not_exists": map[string]interface{}{
+				"file": ".env",
+				"key":  "APP_KEY",
+			},
+		})
+		assert.NoError(t, err)
+		assert.True(t, result, "Empty value should be considered as not existing")
+	})
+
+	t.Run("env_file_not_exists - key exists with value", func(t *testing.T) {
+		os.WriteFile(filepath.Join(tmpDir, ".env"), []byte("APP_KEY=base64:value\n"), 0644)
+
+		result, err := evaluator.Evaluate(map[string]interface{}{
+			"env_file_not_exists": map[string]interface{}{
+				"file": ".env",
+				"key":  "APP_KEY",
+			},
+		})
+		assert.NoError(t, err)
+		assert.False(t, result)
+	})
+
+	t.Run("env_file_not_exists - key with default .env file", func(t *testing.T) {
+		os.WriteFile(filepath.Join(tmpDir, ".env"), []byte("APP_KEY=base64:value\n"), 0644)
+
+		result, err := evaluator.Evaluate(map[string]interface{}{
+			"env_file_not_exists": "APP_KEY",
+		})
+		assert.NoError(t, err)
+		assert.False(t, result)
 	})
 
 	t.Run("not condition - negates true condition", func(t *testing.T) {

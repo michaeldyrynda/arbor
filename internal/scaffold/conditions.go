@@ -91,6 +91,8 @@ func (e *ConditionEvaluator) evaluateSingle(key string, value interface{}) (bool
 		return e.envNotExists(value)
 	case "env_file_contains":
 		return e.envFileContains(value)
+	case "env_file_not_exists":
+		return e.envFileNotExists(value)
 	case "not":
 		result, err := e.evaluateCondition(value)
 		if err != nil {
@@ -258,6 +260,14 @@ func (e *ConditionEvaluator) envFileContains(value interface{}) (bool, error) {
 	}
 
 	env := utils.ReadEnvFile(e.ctx.WorktreePath, config.File)
-	_, exists := env[config.Key]
-	return exists, nil
+	value, exists := env[config.Key]
+	return exists && value != "", nil
+}
+
+func (e *ConditionEvaluator) envFileNotExists(value interface{}) (bool, error) {
+	contains, err := e.envFileContains(value)
+	if err != nil {
+		return false, err
+	}
+	return !contains, nil
 }
