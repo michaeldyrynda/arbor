@@ -91,8 +91,8 @@ func (e *ConditionEvaluator) evaluateSingle(key string, value interface{}) (bool
 		return e.envNotExists(value)
 	case "env_file_contains":
 		return e.envFileContains(value)
-	case "env_file_not_exists":
-		return e.envFileNotExists(value)
+	case "env_file_missing":
+		return e.envFileMissing(value)
 	case "not":
 		result, err := e.evaluateCondition(value)
 		if err != nil {
@@ -264,7 +264,7 @@ func (e *ConditionEvaluator) envFileContains(value interface{}) (bool, error) {
 	return exists && value != "", nil
 }
 
-func (e *ConditionEvaluator) envFileNotExists(value interface{}) (bool, error) {
+func (e *ConditionEvaluator) envFileMissing(value interface{}) (bool, error) {
 	contains, err := e.envFileContains(value)
 	if err != nil {
 		return false, err
