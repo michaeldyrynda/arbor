@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/michaeldyrynda/arbor/internal/scaffold/types"
+	"github.com/michaeldyrynda/arbor/internal/utils"
 )
 
 type ConditionEvaluator struct {
@@ -88,6 +89,8 @@ func (e *ConditionEvaluator) evaluateSingle(key string, value interface{}) (bool
 		return e.envExists(value)
 	case "env_not_exists":
 		return e.envNotExists(value)
+	case "env_file_contains":
+		return e.envFileContains(value)
 	case "not":
 		result, err := e.evaluateCondition(value)
 		if err != nil {
@@ -234,4 +237,27 @@ func (e *ConditionEvaluator) envNotExists(value interface{}) (bool, error) {
 		return false, err
 	}
 	return !exists, nil
+}
+
+func (e *ConditionEvaluator) envFileContains(value interface{}) (bool, error) {
+	var config struct {
+		File string `mapstructure:"file"`
+		Key  string `mapstructure:"key"`
+	}
+
+	switch v := value.(type) {
+	case map[string]interface{}:
+		mapstructure.Decode(v, &config)
+	case string:
+		config.Key = v
+		config.File = ".env"
+	}
+
+	if config.File == "" || config.Key == "" {
+		return false, nil
+	}
+
+	env := utils.ReadEnvFile(e.ctx.WorktreePath, config.File)
+	_, exists := env[config.Key]
+	return exists, nil
 }

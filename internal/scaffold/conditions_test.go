@@ -146,6 +146,53 @@ func TestConditionEvaluator_Evaluate(t *testing.T) {
 		assert.False(t, result)
 	})
 
+	t.Run("env_file_contains - key exists in .env file", func(t *testing.T) {
+		os.WriteFile(filepath.Join(tmpDir, ".env"), []byte("DB_CONNECTION=sqlite\nAPP_KEY=base64:value\n"), 0644)
+
+		result, err := evaluator.Evaluate(map[string]interface{}{
+			"env_file_contains": map[string]interface{}{
+				"file": ".env",
+				"key":  "DB_CONNECTION",
+			},
+		})
+		assert.NoError(t, err)
+		assert.True(t, result)
+	})
+
+	t.Run("env_file_contains - key does not exist in .env file", func(t *testing.T) {
+		os.WriteFile(filepath.Join(tmpDir, ".env"), []byte("APP_KEY=base64:value\n"), 0644)
+
+		result, err := evaluator.Evaluate(map[string]interface{}{
+			"env_file_contains": map[string]interface{}{
+				"file": ".env",
+				"key":  "DB_CONNECTION",
+			},
+		})
+		assert.NoError(t, err)
+		assert.False(t, result)
+	})
+
+	t.Run("env_file_contains - .env file does not exist", func(t *testing.T) {
+		result, err := evaluator.Evaluate(map[string]interface{}{
+			"env_file_contains": map[string]interface{}{
+				"file": ".env",
+				"key":  "DB_CONNECTION",
+			},
+		})
+		assert.NoError(t, err)
+		assert.False(t, result)
+	})
+
+	t.Run("env_file_contains - key with default .env file", func(t *testing.T) {
+		os.WriteFile(filepath.Join(tmpDir, ".env"), []byte("DB_CONNECTION=sqlite\n"), 0644)
+
+		result, err := evaluator.Evaluate(map[string]interface{}{
+			"env_file_contains": "DB_CONNECTION",
+		})
+		assert.NoError(t, err)
+		assert.True(t, result)
+	})
+
 	t.Run("not condition - negates true condition", func(t *testing.T) {
 		os.WriteFile(filepath.Join(tmpDir, "test.txt"), []byte("test"), 0644)
 
