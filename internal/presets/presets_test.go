@@ -70,7 +70,7 @@ func TestLaravelPreset_DefaultSteps(t *testing.T) {
 	assert.Equal(t, "database.create", steps[3].Name)
 
 	assert.Equal(t, "php.laravel.artisan", steps[4].Name)
-	assert.Equal(t, []string{"key:generate"}, steps[4].Args)
+	assert.Equal(t, []string{"key:generate", "--no-interaction"}, steps[4].Args)
 }
 
 func TestLaravelPreset_CleanupSteps(t *testing.T) {
