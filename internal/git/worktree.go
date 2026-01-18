@@ -73,8 +73,7 @@ func RemoveWorktree(worktreePath string, force bool) error {
 		return fmt.Errorf("finding bare repository: %w", err)
 	}
 
-	basePath := filepath.Dir(barePath)
-	cmd := exec.Command("git", append([]string{"-C", basePath}, args...)...)
+	cmd := exec.Command("git", append([]string{"-C", barePath}, args...)...)
 	return cmd.Run()
 }
 
@@ -87,15 +86,28 @@ func ListWorktrees(barePath string) ([]Worktree, error) {
 	}
 
 	var worktrees []Worktree
+	var currentPath string
+	var currentBranch string
 	lines := strings.Split(string(output), "\n")
 	for _, line := range lines {
-		if strings.HasPrefix(line, "+ ") {
-			parts := strings.SplitN(line, " ", 3)
-			if len(parts) >= 3 {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+
+		if strings.HasPrefix(line, "worktree ") {
+			currentPath = strings.TrimPrefix(line, "worktree ")
+			currentPath = strings.TrimSpace(currentPath)
+		} else if strings.HasPrefix(line, "branch refs/heads/") {
+			currentBranch = strings.TrimPrefix(line, "branch refs/heads/")
+			currentBranch = strings.TrimSpace(currentBranch)
+			if currentPath != "" && currentBranch != "" {
 				worktrees = append(worktrees, Worktree{
-					Path:   parts[1],
-					Branch: strings.Trim(parts[2], "[]"),
+					Path:   currentPath,
+					Branch: currentBranch,
 				})
+				currentPath = ""
+				currentBranch = ""
 			}
 		}
 	}
