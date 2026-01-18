@@ -68,16 +68,12 @@ func RemoveWorktree(worktreePath string, force bool) error {
 	}
 	args = append(args, worktreePath)
 
-	// Find the parent directory with .bare
-	parent := findBareParent(worktreePath)
-	if parent == "" {
-		return nil
+	barePath, err := FindBarePath(worktreePath)
+	if err != nil {
+		return fmt.Errorf("finding bare repository: %w", err)
 	}
 
-	gitArgs := []string{"-C", parent}
-	gitArgs = append(gitArgs, args...)
-
-	cmd := exec.Command("git", gitArgs...)
+	cmd := exec.Command("git", append([]string{"-C", barePath}, args...)...)
 	return cmd.Run()
 }
 
@@ -104,25 +100,6 @@ func ListWorktrees(barePath string) ([]Worktree, error) {
 	}
 
 	return worktrees, nil
-}
-
-// FindBareParent finds the parent directory containing .bare
-func findBareParent(path string) string {
-	for {
-		if strings.HasSuffix(path, "/") {
-			path = strings.TrimSuffix(path, "/")
-		}
-
-		if _, err := os.Stat(filepath.Join(path, ".bare")); err == nil {
-			return path
-		}
-
-		parent := filepath.Dir(path)
-		if parent == path {
-			return ""
-		}
-		path = parent
-	}
 }
 
 // GetDefaultBranch returns the default branch name
