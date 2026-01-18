@@ -15,8 +15,8 @@ type ScaffoldManager struct {
 type Preset interface {
 	Name() string
 	Detect(path string) bool
-	DefaultSteps() []types.ScaffoldStep
-	CleanupSteps() []types.ScaffoldStep
+	DefaultSteps() []config.StepConfig
+	CleanupSteps() []config.CleanupStep
 }
 
 func NewScaffoldManager() *ScaffoldManager {
@@ -52,13 +52,18 @@ func (m *ScaffoldManager) GetStepsForWorktree(cfg *config.Config, worktreePath, 
 	}
 
 	if preset, ok := m.GetPreset(presetName); ok {
-		stepsList = append(stepsList, preset.DefaultSteps()...)
+		for _, stepConfig := range preset.DefaultSteps() {
+			step := steps.Create(stepConfig.Name, stepConfig)
+			if step != nil {
+				stepsList = append(stepsList, step)
+			}
+		}
 	}
 
 	if cfg.Scaffold.Override {
-		stepsList = m.stepsFromConfig(cfg.Scaffold.Steps, worktreePath, branch)
+		stepsList = m.stepsFromConfig(cfg.Scaffold.Steps)
 	} else {
-		additionalSteps := m.stepsFromConfig(cfg.Scaffold.Steps, worktreePath, branch)
+		additionalSteps := m.stepsFromConfig(cfg.Scaffold.Steps)
 		stepsList = append(stepsList, additionalSteps...)
 	}
 
@@ -74,11 +79,44 @@ func (m *ScaffoldManager) GetCleanupSteps(cfg *config.Config, worktreePath, bran
 	}
 
 	if preset, ok := m.GetPreset(presetName); ok {
-		stepsList = append(stepsList, preset.CleanupSteps()...)
+		for _, cleanupConfig := range preset.CleanupSteps() {
+			stepConfig := config.StepConfig{
+				Name: cleanupConfig.Name,
+				Args: nil,
+			}
+			if cleanupConfig.Name == "herd" {
+				stepConfig.Args = []string{"unlink"}
+			}
+			for k, v := range cleanupConfig.Condition {
+				if k == "command" {
+					if cmd, ok := v.(string); ok {
+						stepConfig.Command = cmd
+					}
+				}
+			}
+			step := steps.Create(cleanupConfig.Name, stepConfig)
+			if step != nil {
+				stepsList = append(stepsList, step)
+			}
+		}
 	}
 
-	for _, cleanupStep := range cfg.Cleanup {
-		step := m.createStepFromCleanup(cleanupStep, worktreePath, branch)
+	for _, cleanupConfig := range cfg.Cleanup {
+		stepConfig := config.StepConfig{
+			Name: cleanupConfig.Name,
+			Args: nil,
+		}
+		if cleanupConfig.Name == "herd" {
+			stepConfig.Args = []string{"unlink"}
+		}
+		for k, v := range cleanupConfig.Condition {
+			if k == "command" {
+				if cmd, ok := v.(string); ok {
+					stepConfig.Command = cmd
+				}
+			}
+		}
+		step := steps.Create(cleanupConfig.Name, stepConfig)
 		if step != nil {
 			stepsList = append(stepsList, step)
 		}
@@ -87,7 +125,7 @@ func (m *ScaffoldManager) GetCleanupSteps(cfg *config.Config, worktreePath, bran
 	return stepsList, nil
 }
 
-func (m *ScaffoldManager) stepsFromConfig(stepConfigs []config.StepConfig, worktreePath, branch string) []types.ScaffoldStep {
+func (m *ScaffoldManager) stepsFromConfig(stepConfigs []config.StepConfig) []types.ScaffoldStep {
 	stepsList := make([]types.ScaffoldStep, 0, len(stepConfigs))
 
 	for _, cfg := range stepConfigs {
@@ -98,27 +136,6 @@ func (m *ScaffoldManager) stepsFromConfig(stepConfigs []config.StepConfig, workt
 	}
 
 	return stepsList
-}
-
-func (m *ScaffoldManager) createStepFromCleanup(cleanup config.CleanupStep, worktreePath, branch string) types.ScaffoldStep {
-	stepConfig := config.StepConfig{
-		Name: cleanup.Name,
-		Args: nil,
-	}
-
-	if cleanup.Name == "herd" {
-		stepConfig.Args = []string{"unlink"}
-	}
-
-	for k, v := range cleanup.Condition {
-		if k == "command" {
-			if cmd, ok := v.(string); ok {
-				stepConfig.Command = cmd
-			}
-		}
-	}
-
-	return steps.Create(cleanup.Name, stepConfig)
 }
 
 func (m *ScaffoldManager) RunScaffold(worktreePath, branch, preset string, cfg *config.Config, dryRun, verbose bool) error {

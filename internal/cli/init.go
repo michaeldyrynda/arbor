@@ -7,9 +7,12 @@ import (
 
 	"github.com/michaeldyrynda/arbor/internal/config"
 	"github.com/michaeldyrynda/arbor/internal/git"
+	"github.com/michaeldyrynda/arbor/internal/presets"
 	"github.com/michaeldyrynda/arbor/internal/utils"
 	"github.com/spf13/cobra"
 )
+
+var presetManager = presets.NewManager()
 
 var initCmd = &cobra.Command{
 	Use:   "init [REPO] [PATH]",
@@ -23,7 +26,6 @@ Arguments:
 	RunE: func(cmd *cobra.Command, args []string) error {
 		repo := args[0]
 
-		// Determine target path
 		path := ""
 		if len(args) > 1 {
 			path = args[1]
@@ -31,43 +33,34 @@ Arguments:
 			path = utils.ExtractRepoName(repo)
 		}
 
-		// Sanitise path
 		path = utils.SanitisePath(path)
 
-		// Get absolute path
 		absPath, err := filepath.Abs(path)
 		if err != nil {
 			return fmt.Errorf("getting absolute path: %w", err)
 		}
 
-		// Check if gh is available
 		ghAvailable := isCommandAvailable("gh")
 
-		// Determine repo URL
 		repoURL := repo
 		if utils.IsGitShortFormat(repo) && ghAvailable {
-			// Use gh repo clone
 			fmt.Println("Using gh CLI for repository clone")
 			repoURL = repo
 		}
 
-		// Create paths
 		barePath := filepath.Join(absPath, ".bare")
 
-		// Clone repository
 		fmt.Printf("Cloning repository to %s\n", barePath)
 		if err := git.CloneRepo(repoURL, barePath); err != nil {
 			return fmt.Errorf("cloning repository: %w", err)
 		}
 
-		// Get default branch
 		defaultBranch, err := git.GetDefaultBranch(barePath)
 		if err != nil {
 			defaultBranch = "main"
 		}
 		fmt.Printf("Default branch: %s\n", defaultBranch)
 
-		// Create main worktree
 		mainPath := filepath.Join(absPath, defaultBranch)
 		fmt.Printf("Creating main worktree at %s\n", mainPath)
 
@@ -75,14 +68,28 @@ Arguments:
 			return fmt.Errorf("creating main worktree: %w", err)
 		}
 
-		// Generate project config
 		cfg := &config.Config{
 			DefaultBranch: defaultBranch,
 		}
 
 		preset, _ := cmd.Flags().GetString("preset")
+		interactive, _ := cmd.Flags().GetBool("interactive")
+
 		if preset != "" {
 			cfg.Preset = preset
+		} else if interactive {
+			suggested := presetManager.Suggest(mainPath)
+			selected, err := presets.PromptForPreset(presetManager, suggested)
+			if err != nil {
+				return fmt.Errorf("prompting for preset: %w", err)
+			}
+			cfg.Preset = selected
+		} else {
+			detected := presetManager.Detect(mainPath)
+			if detected != "" {
+				cfg.Preset = detected
+				fmt.Printf("Detected preset: %s\n", detected)
+			}
 		}
 
 		if err := config.SaveProject(absPath, cfg); err != nil {
@@ -103,7 +110,6 @@ func init() {
 	initCmd.Flags().Bool("interactive", false, "Interactive preset selection")
 }
 
-// isCommandAvailable checks if a command is available in PATH
 func isCommandAvailable(name string) bool {
 	_, err := exec.LookPath(name)
 	return err == nil
