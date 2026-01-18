@@ -29,10 +29,10 @@ type binaryDefinition struct {
 var binaries = []binaryDefinition{
 	{"php", "php", 5},
 	{"php.composer", "composer", 10},
+	{"php.laravel.artisan", "php artisan", 20},
 	{"node.npm", "npm", 10},
 	{"node.yarn", "yarn", 10},
 	{"node.pnpm", "pnpm", 10},
-	{"php.laravel.artisan", "php", 20},
 	{"herd", "herd", 60},
 }
 
