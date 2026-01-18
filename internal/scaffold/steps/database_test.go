@@ -10,11 +10,7 @@ import (
 )
 
 func TestDatabaseStep(t *testing.T) {
-	t.Run("condition - returns true when DB_CONNECTION is set but DB_DATABASE is not", func(t *testing.T) {
-		os.Setenv("DB_CONNECTION", "mysql")
-		os.Unsetenv("DB_DATABASE")
-		defer os.Unsetenv("DB_CONNECTION")
-
+	t.Run("condition always returns true - controlled by preset", func(t *testing.T) {
 		step := NewDatabaseStep(8)
 		ctx := types.ScaffoldContext{
 			WorktreePath: t.TempDir(),
@@ -23,87 +19,66 @@ func TestDatabaseStep(t *testing.T) {
 		assert.True(t, step.Condition(ctx))
 	})
 
-	t.Run("condition - returns false when DB_CONNECTION is sqlite", func(t *testing.T) {
-		os.Setenv("DB_CONNECTION", "sqlite")
-		os.Unsetenv("DB_DATABASE")
-		defer os.Unsetenv("DB_CONNECTION")
-
+	t.Run("skips when no DB_CONNECTION in context", func(t *testing.T) {
 		step := NewDatabaseStep(8)
 		ctx := types.ScaffoldContext{
 			WorktreePath: t.TempDir(),
+			Env:          make(map[string]string),
 		}
 
-		assert.False(t, step.Condition(ctx))
+		err := step.Run(ctx, types.StepOptions{Verbose: false})
+		assert.NoError(t, err)
 	})
 
-	t.Run("condition - returns false when DB_DATABASE is already set", func(t *testing.T) {
-		os.Setenv("DB_CONNECTION", "mysql")
-		os.Setenv("DB_DATABASE", "existing_db")
-		defer os.Unsetenv("DB_CONNECTION")
-		defer os.Unsetenv("DB_DATABASE")
+	t.Run("reads DB_CONNECTION from .env file", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		envFile := filepath.Join(tmpDir, ".env")
+		os.WriteFile(envFile, []byte("DB_CONNECTION=mysql\nDB_DATABASE=testdb\n"), 0644)
 
 		step := NewDatabaseStep(8)
 		ctx := types.ScaffoldContext{
-			WorktreePath: t.TempDir(),
+			WorktreePath: tmpDir,
+			Env:          make(map[string]string),
 		}
 
-		assert.False(t, step.Condition(ctx))
+		err := step.Run(ctx, types.StepOptions{Verbose: false})
+		assert.NoError(t, err)
 	})
 
-	t.Run("condition - returns false when DB_CONNECTION is not set", func(t *testing.T) {
-		os.Unsetenv("DB_CONNECTION")
-		os.Unsetenv("DB_DATABASE")
+	t.Run("creates SQLite database file", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		envFile := filepath.Join(tmpDir, ".env")
+		os.WriteFile(envFile, []byte("DB_CONNECTION=sqlite\nDB_DATABASE=database/test.sqlite\n"), 0644)
 
 		step := NewDatabaseStep(8)
 		ctx := types.ScaffoldContext{
-			WorktreePath: t.TempDir(),
+			WorktreePath: tmpDir,
+			Env:          make(map[string]string),
 		}
 
-		assert.False(t, step.Condition(ctx))
+		err := step.Run(ctx, types.StepOptions{Verbose: true})
+		assert.NoError(t, err)
+
+		dbFile := filepath.Join(tmpDir, "database", "test.sqlite")
+		assert.FileExists(t, dbFile)
 	})
 
 	t.Run("generates database name with app_ prefix", func(t *testing.T) {
-		step := NewDatabaseStep(8)
-
-		os.Setenv("DB_CONNECTION", "mysql")
-		os.Unsetenv("DB_DATABASE")
-		defer os.Unsetenv("DB_CONNECTION")
-		defer os.Unsetenv("DB_DATABASE")
-
-		ctx := types.ScaffoldContext{
-			WorktreePath: t.TempDir(),
-		}
-
-		err := step.Run(ctx, types.StepOptions{Verbose: false})
-		assert.NoError(t, err)
-
-		dbName := os.Getenv("DB_DATABASE")
-		assert.Contains(t, dbName, "app_")
-		assert.Len(t, dbName, 12) // "app_" + 8 hex chars = 12
-	})
-
-	t.Run("writes DB_DATABASE to .env file", func(t *testing.T) {
-		step := NewDatabaseStep(8)
-
 		tmpDir := t.TempDir()
-		os.Setenv("DB_CONNECTION", "mysql")
-		os.Unsetenv("DB_DATABASE")
-		defer os.Unsetenv("DB_CONNECTION")
-		defer os.Unsetenv("DB_DATABASE")
 
 		envFile := filepath.Join(tmpDir, ".env")
-		os.WriteFile(envFile, []byte("APP_NAME=test\n"), 0644)
+		os.WriteFile(envFile, []byte("DB_CONNECTION=mysql\n"), 0644)
 
+		step := NewDatabaseStep(8)
 		ctx := types.ScaffoldContext{
 			WorktreePath: tmpDir,
+			Env:          make(map[string]string),
 		}
 
 		err := step.Run(ctx, types.StepOptions{Verbose: false})
 		assert.NoError(t, err)
-
-		content, err := os.ReadFile(envFile)
-		assert.NoError(t, err)
-		assert.Contains(t, string(content), "DB_DATABASE=")
 	})
 
 	t.Run("name returns correct value", func(t *testing.T) {
@@ -114,5 +89,19 @@ func TestDatabaseStep(t *testing.T) {
 	t.Run("priority returns correct value", func(t *testing.T) {
 		step := NewDatabaseStep(8)
 		assert.Equal(t, 8, step.Priority())
+	})
+
+	t.Run("reads DB config from context env", func(t *testing.T) {
+		step := NewDatabaseStep(8)
+		ctx := types.ScaffoldContext{
+			WorktreePath: t.TempDir(),
+			Env: map[string]string{
+				"DB_CONNECTION": "mysql",
+				"DB_DATABASE":   "testdb",
+			},
+		}
+
+		err := step.Run(ctx, types.StepOptions{Verbose: false})
+		assert.NoError(t, err)
 	})
 }

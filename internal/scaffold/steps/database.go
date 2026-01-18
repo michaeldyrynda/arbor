@@ -33,32 +33,106 @@ func (s *DatabaseStep) Priority() int {
 }
 
 func (s *DatabaseStep) Condition(ctx types.ScaffoldContext) bool {
-	conn, exists := os.LookupEnv("DB_CONNECTION")
-	if !exists || conn == "sqlite" {
-		return false
-	}
-
-	dbName, exists := os.LookupEnv("DB_DATABASE")
-	if exists && dbName != "" {
-		return false
-	}
-
 	return true
 }
 
 func (s *DatabaseStep) Run(ctx types.ScaffoldContext, opts types.StepOptions) error {
-	if opts.Verbose {
-		fmt.Printf("  Checking database configuration...\n")
+	dbType := ctx.Env["DB_CONNECTION"]
+	dbName := ctx.Env["DB_DATABASE"]
+
+	if dbType == "" && dbName == "" {
+		dbType, dbName = s.readDbConfigFromEnv(ctx.WorktreePath)
 	}
 
-	dbName := generateDatabaseName()
-	dbUser := getEnv("DB_USERNAME", "root")
-	dbPass := getEnv("DB_PASSWORD", "")
-	dbHost := getEnv("DB_HOST", "127.0.0.1")
-	dbPort := getEnv("DB_PORT", "3306")
+	if dbType == "" && dbName == "" {
+		if opts.Verbose {
+			fmt.Printf("  No database configuration found, skipping database creation.\n")
+		}
+		return nil
+	}
 
-	if err := os.Setenv("DB_DATABASE", dbName); err != nil {
-		return fmt.Errorf("setting DB_DATABASE: %w", err)
+	if opts.Verbose {
+		fmt.Printf("  Creating database (%s)...\n", dbType)
+	}
+
+	if dbType == "sqlite" {
+		return s.createSqliteDatabase(ctx, dbName, opts)
+	}
+
+	return s.createMysqlOrPgsqlDatabase(ctx, dbName, opts)
+}
+
+func (s *DatabaseStep) readDbConfigFromEnv(worktreePath string) (string, string) {
+	envFile := filepath.Join(worktreePath, ".env")
+	data, err := os.ReadFile(envFile)
+	if err != nil {
+		return "", ""
+	}
+
+	lines := string(data)
+	var dbType, dbName string
+
+	for _, line := range strings.Split(lines, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "DB_CONNECTION=") {
+			dbType = strings.TrimPrefix(line, "DB_CONNECTION=")
+		}
+		if strings.HasPrefix(line, "DB_DATABASE=") {
+			dbName = strings.TrimPrefix(line, "DB_DATABASE=")
+		}
+	}
+
+	return dbType, dbName
+}
+
+func (s *DatabaseStep) createSqliteDatabase(ctx types.ScaffoldContext, dbName string, opts types.StepOptions) error {
+	if dbName == "" {
+		dbName = "database/database.sqlite"
+	}
+
+	dbFile := filepath.Join(ctx.WorktreePath, dbName)
+	dbDir := filepath.Dir(dbFile)
+
+	if err := os.MkdirAll(dbDir, 0755); err != nil {
+		return fmt.Errorf("creating database directory: %w", err)
+	}
+
+	if _, err := os.Stat(dbFile); os.IsNotExist(err) {
+		if opts.Verbose {
+			fmt.Printf("  Creating SQLite database: %s\n", dbName)
+		}
+
+		file, err := os.Create(dbFile)
+		if err != nil {
+			return fmt.Errorf("creating SQLite database file: %w", err)
+		}
+		file.Close()
+	} else {
+		if opts.Verbose {
+			fmt.Printf("  SQLite database already exists: %s\n", dbName)
+		}
+	}
+
+	return nil
+}
+
+func (s *DatabaseStep) createMysqlOrPgsqlDatabase(ctx types.ScaffoldContext, dbName string, opts types.StepOptions) error {
+	if dbName == "" {
+		dbName = generateDatabaseName()
+	}
+
+	dbUser := ctx.Env["DB_USERNAME"]
+	if dbUser == "" {
+		dbUser = "root"
+	}
+	dbPass := ctx.Env["DB_PASSWORD"]
+	dbHost := ctx.Env["DB_HOST"]
+	if dbHost == "" {
+		dbHost = "127.0.0.1"
+	}
+	dbPort := ctx.Env["DB_PORT"]
+	if dbPort == "" {
+		dbPort = "3306"
 	}
 
 	if opts.Verbose {
@@ -100,22 +174,6 @@ func (s *DatabaseStep) Run(ctx types.ScaffoldContext, opts types.StepOptions) er
 		fmt.Printf("  Please create database '%s' manually before running migrations.\n", dbName)
 	}
 
-	envFile := filepath.Join(ctx.WorktreePath, ".env")
-	if _, err := os.Stat(envFile); err == nil {
-		content, err := os.ReadFile(envFile)
-		if err == nil {
-			envContent := string(content)
-			if !strings.Contains(envContent, "DB_DATABASE=") {
-				newContent := envContent + fmt.Sprintf("\nDB_DATABASE=%s\n", dbName)
-				if err := os.WriteFile(envFile, []byte(newContent), 0644); err == nil {
-					if opts.Verbose {
-						fmt.Printf("  Added DB_DATABASE to .env file.\n")
-					}
-				}
-			}
-		}
-	}
-
 	return nil
 }
 
@@ -123,11 +181,4 @@ func generateDatabaseName() string {
 	bytes := make([]byte, 4)
 	rand.Read(bytes)
 	return fmt.Sprintf("app_%s", hex.EncodeToString(bytes))
-}
-
-func getEnv(key, defaultValue string) string {
-	if val, exists := os.LookupEnv(key); exists {
-		return val
-	}
-	return defaultValue
 }
