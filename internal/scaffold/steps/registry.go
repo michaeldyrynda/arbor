@@ -29,7 +29,6 @@ type binaryDefinition struct {
 var binaries = []binaryDefinition{
 	{"php", "php", 5},
 	{"php.composer", "composer", 10},
-	{"php.laravel.artisan", "php artisan", 20},
 	{"node.npm", "npm", 10},
 	{"node.yarn", "yarn", 10},
 	{"node.pnpm", "pnpm", 10},
@@ -49,6 +48,14 @@ func init() {
 			return NewBinaryStep(name, binary, cfg.Args, priority)
 		})
 	}
+
+	Register("php.laravel.artisan", func(cfg config.StepConfig) types.ScaffoldStep {
+		priority := 20
+		if cfg.Priority != 0 {
+			priority = cfg.Priority
+		}
+		return NewArtisanStep(cfg, priority)
+	})
 
 	Register("file.copy", func(cfg config.StepConfig) types.ScaffoldStep {
 		priority := 9
