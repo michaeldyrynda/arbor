@@ -16,7 +16,7 @@ func createTestRepo(t *testing.T) (string, string) {
 		t.Fatalf("creating repo dir: %v", err)
 	}
 
-	cmd := exec.Command("git", "init")
+	cmd := exec.Command("git", "init", "-b", "main")
 	cmd.Dir = repoDir
 	if err := cmd.Run(); err != nil {
 		t.Fatalf("initializing git repo: %v", err)
