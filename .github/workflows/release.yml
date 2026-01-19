@@ -41,7 +41,9 @@ jobs:
 
       - name: Get version
         id: version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+        run: |
+          $version = $env:GITHUB_REF -replace 'refs/tags/v', ''
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "VERSION=$version"
 
       - name: Build binary
         env:
