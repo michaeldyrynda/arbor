@@ -41,9 +41,8 @@ jobs:
 
       - name: Get version
         id: version
-        run: |
-          $version = $env:GITHUB_REF -replace 'refs/tags/v', ''
-          Add-Content -Path $env:GITHUB_OUTPUT -Value "VERSION=$version"
+        shell: bash
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
       - name: Build binary
         env:
@@ -58,7 +57,10 @@ jobs:
 
       - name: Create zip
         if: matrix.zip_extension == 'zip'
-        run: 7z a arbor-${{ steps.version.outputs.VERSION }}-${{ matrix.artifact_suffix }}.${{ matrix.zip_extension }} arbor-${{ steps.version.outputs.VERSION }}-${{ matrix.artifact_suffix }}
+        shell: pwsh
+        run: |
+          $version = $env:GITHUB_REF -replace 'refs/tags/v', ''
+          7z a "arbor-$version-${{ matrix.artifact_suffix }}.zip" "arbor-$version-${{ matrix.artifact_suffix }}"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
