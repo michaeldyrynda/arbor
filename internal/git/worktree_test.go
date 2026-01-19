@@ -436,3 +436,363 @@ func TestFindWorktreeByFolderName(t *testing.T) {
 		t.Errorf("expected path %s, got %s", featurePath, targetWorktree.Path)
 	}
 }
+
+func TestListWorktreesDetailed(t *testing.T) {
+	barePath, _ := createTestRepo(t)
+	projectDir := filepath.Dir(barePath)
+
+	mainPath := filepath.Join(projectDir, "main")
+	if err := CreateWorktree(barePath, mainPath, "main", ""); err != nil {
+		t.Fatalf("creating main worktree: %v", err)
+	}
+
+	featurePath := filepath.Join(projectDir, "feature")
+	if err := CreateWorktree(barePath, featurePath, "feature", "main"); err != nil {
+		t.Fatalf("creating feature worktree: %v", err)
+	}
+
+	cmd := exec.Command("git", "config", "user.email", "test@example.com")
+	cmd.Dir = featurePath
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("setting git user.email: %v", err)
+	}
+
+	cmd = exec.Command("git", "config", "user.name", "Test User")
+	cmd.Dir = featurePath
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("setting git user.name: %v", err)
+	}
+
+	readmePath := filepath.Join(featurePath, "README.md")
+	if err := os.WriteFile(readmePath, []byte("test\nfeature"), 0644); err != nil {
+		t.Fatalf("writing README: %v", err)
+	}
+
+	cmd = exec.Command("git", "add", ".")
+	cmd.Dir = featurePath
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("staging files: %v", err)
+	}
+
+	cmd = exec.Command("git", "commit", "-m", "Feature commit")
+	cmd.Dir = featurePath
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("committing: %v", err)
+	}
+
+	worktrees, err := ListWorktreesDetailed(barePath, mainPath, "main")
+	if err != nil {
+		t.Fatalf("listing worktrees detailed: %v", err)
+	}
+
+	if len(worktrees) != 2 {
+		t.Errorf("expected 2 worktrees, got %d", len(worktrees))
+	}
+
+	for _, wt := range worktrees {
+		if wt.Branch == "main" {
+			if !wt.IsMain {
+				t.Error("main worktree should have IsMain=true")
+			}
+			if !wt.IsCurrent {
+				t.Error("main worktree should have IsCurrent=true when it's the current path")
+			}
+		} else if wt.Branch == "feature" {
+			if wt.IsMain {
+				t.Error("feature worktree should have IsMain=false")
+			}
+			if wt.IsCurrent {
+				t.Error("feature worktree should have IsCurrent=false")
+			}
+			// feature at same commit as main should NOT be marked as merged
+			if wt.IsMerged {
+				t.Error("feature worktree should not be merged (at same commit as main)")
+			}
+		}
+	}
+}
+
+func TestListWorktreesDetailed_CurrentWorktree(t *testing.T) {
+	barePath, _ := createTestRepo(t)
+	projectDir := filepath.Dir(barePath)
+
+	mainPath := filepath.Join(projectDir, "main")
+	if err := CreateWorktree(barePath, mainPath, "main", ""); err != nil {
+		t.Fatalf("creating main worktree: %v", err)
+	}
+
+	featurePath := filepath.Join(projectDir, "feature")
+	if err := CreateWorktree(barePath, featurePath, "feature", "main"); err != nil {
+		t.Fatalf("creating feature worktree: %v", err)
+	}
+
+	worktrees, err := ListWorktreesDetailed(barePath, featurePath, "main")
+	if err != nil {
+		t.Fatalf("listing worktrees detailed: %v", err)
+	}
+
+	for _, wt := range worktrees {
+		if wt.Branch == "main" {
+			if wt.IsCurrent {
+				t.Error("main worktree should not be current when feature path is passed")
+			}
+		} else if wt.Branch == "feature" {
+			if !wt.IsCurrent {
+				t.Error("feature worktree should be current when feature path is passed")
+			}
+		}
+	}
+}
+
+func TestListWorktreesDetailed_ShowsMergedWhenMerged(t *testing.T) {
+	barePath, _ := createTestRepo(t)
+	projectDir := filepath.Dir(barePath)
+
+	mainPath := filepath.Join(projectDir, "main")
+	if err := CreateWorktree(barePath, mainPath, "main", ""); err != nil {
+		t.Fatalf("creating main worktree: %v", err)
+	}
+
+	featurePath := filepath.Join(projectDir, "feature")
+	if err := CreateWorktree(barePath, featurePath, "feature", "main"); err != nil {
+		t.Fatalf("creating feature worktree: %v", err)
+	}
+
+	cmd := exec.Command("git", "config", "user.email", "test@example.com")
+	cmd.Dir = featurePath
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("setting git user.email: %v", err)
+	}
+
+	cmd = exec.Command("git", "config", "user.name", "Test User")
+	cmd.Dir = featurePath
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("setting git user.name: %v", err)
+	}
+
+	readmePath := filepath.Join(featurePath, "README.md")
+	if err := os.WriteFile(readmePath, []byte("test\nfeature"), 0644); err != nil {
+		t.Fatalf("writing README: %v", err)
+	}
+
+	cmd = exec.Command("git", "add", ".")
+	cmd.Dir = featurePath
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("staging files: %v", err)
+	}
+
+	cmd = exec.Command("git", "commit", "-m", "Feature commit")
+	cmd.Dir = featurePath
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("committing: %v", err)
+	}
+
+	cmd = exec.Command("git", "checkout", "main")
+	cmd.Dir = mainPath
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("switching to main: %v", err)
+	}
+
+	cmd = exec.Command("git", "merge", "feature", "--no-ff", "-m", "Merge feature branch")
+	cmd.Dir = mainPath
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("merging feature into main: %v", err)
+	}
+
+	worktrees, err := ListWorktreesDetailed(barePath, mainPath, "main")
+	if err != nil {
+		t.Fatalf("listing worktrees detailed: %v", err)
+	}
+
+	for _, wt := range worktrees {
+		if wt.Branch == "feature" {
+			if !wt.IsMerged {
+				t.Error("feature worktree should be marked as merged after being merged into main")
+			}
+		}
+	}
+}
+
+func TestSortWorktrees_ByName(t *testing.T) {
+	barePath, _ := createTestRepo(t)
+	projectDir := filepath.Dir(barePath)
+
+	mainPath := filepath.Join(projectDir, "main")
+	if err := CreateWorktree(barePath, mainPath, "main", ""); err != nil {
+		t.Fatalf("creating main worktree: %v", err)
+	}
+
+	featureZPath := filepath.Join(projectDir, "feature-z")
+	if err := CreateWorktree(barePath, featureZPath, "feature-z", "main"); err != nil {
+		t.Fatalf("creating feature-z worktree: %v", err)
+	}
+
+	featureAPath := filepath.Join(projectDir, "feature-a")
+	if err := CreateWorktree(barePath, featureAPath, "feature-a", "main"); err != nil {
+		t.Fatalf("creating feature-a worktree: %v", err)
+	}
+
+	worktrees, err := ListWorktrees(barePath)
+	if err != nil {
+		t.Fatalf("listing worktrees: %v", err)
+	}
+
+	sorted := SortWorktrees(worktrees, "name", false)
+
+	if len(sorted) != 3 {
+		t.Fatalf("expected 3 worktrees, got %d", len(sorted))
+	}
+
+	names := []string{filepath.Base(sorted[0].Path), filepath.Base(sorted[1].Path), filepath.Base(sorted[2].Path)}
+	expected := []string{"feature-a", "feature-z", "main"}
+	for i, name := range names {
+		if name != expected[i] {
+			t.Errorf("expected worktree %d to be %s, got %s", i, expected[i], name)
+		}
+	}
+}
+
+func TestSortWorktrees_ByName_Reverse(t *testing.T) {
+	barePath, _ := createTestRepo(t)
+	projectDir := filepath.Dir(barePath)
+
+	mainPath := filepath.Join(projectDir, "main")
+	if err := CreateWorktree(barePath, mainPath, "main", ""); err != nil {
+		t.Fatalf("creating main worktree: %v", err)
+	}
+
+	featureAPath := filepath.Join(projectDir, "feature-a")
+	if err := CreateWorktree(barePath, featureAPath, "feature-a", "main"); err != nil {
+		t.Fatalf("creating feature-a worktree: %v", err)
+	}
+
+	worktrees, err := ListWorktrees(barePath)
+	if err != nil {
+		t.Fatalf("listing worktrees: %v", err)
+	}
+
+	sorted := SortWorktrees(worktrees, "name", true)
+
+	if len(sorted) != 2 {
+		t.Fatalf("expected 2 worktrees, got %d", len(sorted))
+	}
+
+	names := []string{filepath.Base(sorted[0].Path), filepath.Base(sorted[1].Path)}
+	expected := []string{"main", "feature-a"}
+	for i, name := range names {
+		if name != expected[i] {
+			t.Errorf("expected worktree %d to be %s, got %s", i, expected[i], name)
+		}
+	}
+}
+
+func TestSortWorktrees_ByBranch(t *testing.T) {
+	barePath, _ := createTestRepo(t)
+	projectDir := filepath.Dir(barePath)
+
+	mainPath := filepath.Join(projectDir, "main")
+	if err := CreateWorktree(barePath, mainPath, "main", ""); err != nil {
+		t.Fatalf("creating main worktree: %v", err)
+	}
+
+	zuluPath := filepath.Join(projectDir, "zulu")
+	if err := CreateWorktree(barePath, zuluPath, "zulu", "main"); err != nil {
+		t.Fatalf("creating zulu worktree: %v", err)
+	}
+
+	alphaPath := filepath.Join(projectDir, "alpha")
+	if err := CreateWorktree(barePath, alphaPath, "alpha", "main"); err != nil {
+		t.Fatalf("creating alpha worktree: %v", err)
+	}
+
+	worktrees, err := ListWorktrees(barePath)
+	if err != nil {
+		t.Fatalf("listing worktrees: %v", err)
+	}
+
+	sorted := SortWorktrees(worktrees, "branch", false)
+
+	if len(sorted) != 3 {
+		t.Fatalf("expected 3 worktrees, got %d", len(sorted))
+	}
+
+	branches := []string{sorted[0].Branch, sorted[1].Branch, sorted[2].Branch}
+	expected := []string{"alpha", "main", "zulu"}
+	for i, branch := range branches {
+		if branch != expected[i] {
+			t.Errorf("expected worktree %d to have branch %s, got %s", i, expected[i], branch)
+		}
+	}
+}
+
+func TestSortWorktrees_ByCreated(t *testing.T) {
+	barePath, _ := createTestRepo(t)
+	projectDir := filepath.Dir(barePath)
+
+	mainPath := filepath.Join(projectDir, "main")
+	if err := CreateWorktree(barePath, mainPath, "main", ""); err != nil {
+		t.Fatalf("creating main worktree: %v", err)
+	}
+
+	featurePath := filepath.Join(projectDir, "feature")
+	if err := CreateWorktree(barePath, featurePath, "feature", "main"); err != nil {
+		t.Fatalf("creating feature worktree: %v", err)
+	}
+
+	worktrees, err := ListWorktrees(barePath)
+	if err != nil {
+		t.Fatalf("listing worktrees: %v", err)
+	}
+
+	sorted := SortWorktrees(worktrees, "created", false)
+
+	if len(sorted) != 2 {
+		t.Fatalf("expected 2 worktrees, got %d", len(sorted))
+	}
+
+	if filepath.Base(sorted[0].Path) != "main" {
+		t.Error("main worktree should be first (oldest)")
+	}
+	if filepath.Base(sorted[1].Path) != "feature" {
+		t.Error("feature worktree should be second (newer)")
+	}
+}
+
+func TestSortWorktrees_DefaultIsByName(t *testing.T) {
+	barePath, _ := createTestRepo(t)
+	projectDir := filepath.Dir(barePath)
+
+	mainPath := filepath.Join(projectDir, "main")
+	if err := CreateWorktree(barePath, mainPath, "main", ""); err != nil {
+		t.Fatalf("creating main worktree: %v", err)
+	}
+
+	zetaPath := filepath.Join(projectDir, "zeta")
+	if err := CreateWorktree(barePath, zetaPath, "zeta", "main"); err != nil {
+		t.Fatalf("creating zeta worktree: %v", err)
+	}
+
+	alphaPath := filepath.Join(projectDir, "alpha")
+	if err := CreateWorktree(barePath, alphaPath, "alpha", "main"); err != nil {
+		t.Fatalf("creating alpha worktree: %v", err)
+	}
+
+	worktrees, err := ListWorktrees(barePath)
+	if err != nil {
+		t.Fatalf("listing worktrees: %v", err)
+	}
+
+	sorted := SortWorktrees(worktrees, "", false)
+
+	if len(sorted) != 3 {
+		t.Fatalf("expected 3 worktrees, got %d", len(sorted))
+	}
+
+	names := []string{filepath.Base(sorted[0].Path), filepath.Base(sorted[1].Path), filepath.Base(sorted[2].Path)}
+	expected := []string{"alpha", "main", "zeta"}
+	for i, name := range names {
+		if name != expected[i] {
+			t.Errorf("expected worktree %d to be %s, got %s", i, expected[i], name)
+		}
+	}
+}

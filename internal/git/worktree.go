@@ -5,13 +5,17 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
 // Worktree represents a git worktree
 type Worktree struct {
-	Path   string
-	Branch string
+	Path      string
+	Branch    string
+	IsMain    bool
+	IsCurrent bool
+	IsMerged  bool
 }
 
 // BareRepo represents a bare git repository
@@ -117,6 +121,59 @@ func ListWorktrees(barePath string) ([]Worktree, error) {
 	}
 
 	return worktrees, nil
+}
+
+// ListWorktreesDetailed lists all worktrees with additional metadata
+func ListWorktreesDetailed(barePath, currentWorktreePath, defaultBranch string) ([]Worktree, error) {
+	worktrees, err := ListWorktrees(barePath)
+	if err != nil {
+		return nil, err
+	}
+
+	for i := range worktrees {
+		wt := &worktrees[i]
+		wt.IsMain = wt.Branch == defaultBranch
+		wt.IsCurrent = wt.Path == currentWorktreePath
+		if wt.Branch != defaultBranch {
+			featureInDefault, _ := IsMerged(barePath, wt.Branch, defaultBranch)
+			defaultInFeature, _ := IsMerged(barePath, defaultBranch, wt.Branch)
+			wt.IsMerged = featureInDefault && !defaultInFeature
+		}
+	}
+
+	return worktrees, nil
+}
+
+// SortWorktrees sorts worktrees by the specified criteria
+func SortWorktrees(worktrees []Worktree, by string, reverse bool) []Worktree {
+	sorted := make([]Worktree, len(worktrees))
+	copy(sorted, worktrees)
+
+	sort.Slice(sorted, func(i, j int) bool {
+		var cmp int
+		switch by {
+		case "branch":
+			cmp = strings.Compare(sorted[i].Branch, sorted[j].Branch)
+		case "created":
+			infoI, errI := os.Stat(sorted[i].Path)
+			infoJ, errJ := os.Stat(sorted[j].Path)
+			if errI != nil || errJ != nil {
+				cmp = strings.Compare(sorted[i].Path, sorted[j].Path)
+			} else {
+				cmp = int(infoI.ModTime().Sub(infoJ.ModTime()).Nanoseconds())
+			}
+		default: // "name"
+			nameI := filepath.Base(sorted[i].Path)
+			nameJ := filepath.Base(sorted[j].Path)
+			cmp = strings.Compare(nameI, nameJ)
+		}
+		if reverse {
+			cmp = -cmp
+		}
+		return cmp < 0
+	})
+
+	return sorted
 }
 
 // GetDefaultBranch returns the default branch name
