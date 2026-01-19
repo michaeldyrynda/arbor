@@ -77,6 +77,33 @@ jobs:
         id: version
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
+      - name: Get previous tag
+        id: previous_tag
+        run: |
+          PREVIOUS=$(git describe --tags --abbrev=0 "v${{ steps.version.outputs.VERSION }}^" 2>/dev/null || echo "")
+          echo "PREVIOUS=$PREVIOUS" >> $GITHUB_OUTPUT
+
+      - name: Get tag annotation
+        id: tag_annotation
+        run: |
+          ANNOTATION=$(git tag -l --format='%(contents)' "v${{ steps.version.outputs.VERSION }}")
+          echo "ANNOTATION<<EOF" >> $GITHUB_OUTPUT
+          echo "$ANNOTATION" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Build release body
+        id: release_body
+        run: |
+          BODY="${{ steps.tag_annotation.outputs.ANNOTATION }}"
+          PREVIOUS="${{ steps.previous_tag.outputs.PREVIOUS }}"
+          CURRENT="v${{ steps.version.outputs.VERSION }}"
+          if [ -n "$PREVIOUS" ]; then
+            BODY="${BODY}\n\n**Full changelog:** [$PREVIOUS..$CURRENT](https://github.com/${{ github.repository }}/compare/$PREVIOUS..$CURRENT)"
+          fi
+          echo "BODY<<EOF" >> $GITHUB_OUTPUT
+          echo "$BODY" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
@@ -86,7 +113,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.version.outputs.VERSION }}
+          name: v${{ steps.version.outputs.VERSION }}
+          body: ${{ steps.release_body.outputs.BODY }}
           files: release-artifacts/**
-          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
