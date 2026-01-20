@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 
@@ -99,7 +100,8 @@ interactive review before removal.`,
 					preset = pc.PresetManager().Detect(wt.Path)
 				}
 
-				if err := pc.ScaffoldManager().RunCleanup(wt.Path, wt.Branch, "", preset, pc.Config, false, verbose); err != nil {
+				siteName := filepath.Base(wt.Path)
+				if err := pc.ScaffoldManager().RunCleanup(wt.Path, wt.Branch, "", siteName, preset, pc.Config, false, verbose); err != nil {
 					ui.PrintErrorWithHint("Cleanup failed", err.Error())
 				}
 

@@ -82,6 +82,7 @@ func (s *BinaryStep) Run(ctx types.ScaffoldContext, opts types.StepOptions) erro
 func (s *BinaryStep) replaceTemplate(args []string, ctx types.ScaffoldContext) []string {
 	for i, arg := range args {
 		arg = strings.ReplaceAll(arg, "{{ .RepoName }}", ctx.RepoName)
+		arg = strings.ReplaceAll(arg, "{{ .SiteName }}", ctx.SiteName)
 		arg = strings.ReplaceAll(arg, "{{ .Branch }}", ctx.Branch)
 		args[i] = arg
 	}

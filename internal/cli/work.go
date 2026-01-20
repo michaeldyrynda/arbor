@@ -108,7 +108,8 @@ available branches or entering a new branch name.`,
 			}
 
 			repoName := filepath.Base(filepath.Dir(absWorktreePath))
-			if err := pc.ScaffoldManager().RunScaffold(absWorktreePath, branch, repoName, preset, pc.Config, false, verbose); err != nil {
+			folderName := filepath.Base(absWorktreePath)
+			if err := pc.ScaffoldManager().RunScaffold(absWorktreePath, branch, repoName, folderName, preset, pc.Config, false, verbose); err != nil {
 				ui.PrintErrorWithHint("Scaffold steps failed", err.Error())
 			}
 		} else {

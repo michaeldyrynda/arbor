@@ -84,8 +84,11 @@ Arguments:
 		}
 		ui.PrintSuccess(fmt.Sprintf("Created main worktree at %s", mainPath))
 
+		repoName := utils.SanitisePath(utils.ExtractRepoName(repo))
+
 		cfg := &config.Config{
 			DefaultBranch: defaultBranch,
+			SiteName:      repoName,
 		}
 
 		preset := mustGetString(cmd, "preset")
@@ -117,13 +120,11 @@ Arguments:
 
 		verbose := mustGetBool(cmd, "verbose")
 
-		repoName := utils.SanitisePath(utils.ExtractRepoName(repo))
-
 		if cfg.Preset != "" && verbose {
 			ui.PrintInfo(fmt.Sprintf("Running scaffold for preset: %s", cfg.Preset))
 		}
 
-		if err := scaffoldManager.RunScaffold(mainPath, defaultBranch, repoName, cfg.Preset, cfg, false, verbose); err != nil {
+		if err := scaffoldManager.RunScaffold(mainPath, defaultBranch, repoName, cfg.SiteName, cfg.Preset, cfg, false, verbose); err != nil {
 			ui.PrintErrorWithHint("Scaffold steps failed", err.Error())
 		}
 

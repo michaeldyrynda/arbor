@@ -107,7 +107,8 @@ Cleanup steps may include:
 			}
 
 			if preset != "" {
-				if err := pc.ScaffoldManager().RunCleanup(targetWorktree.Path, targetWorktree.Branch, "", preset, pc.Config, false, verbose); err != nil {
+				siteName := filepath.Base(targetWorktree.Path)
+				if err := pc.ScaffoldManager().RunCleanup(targetWorktree.Path, targetWorktree.Branch, "", siteName, preset, pc.Config, false, verbose); err != nil {
 					ui.PrintErrorWithHint("Cleanup failed", err.Error())
 				}
 			}

@@ -25,6 +25,7 @@ var DefaultBranchCandidates = []string{"main", "master", "develop"}
 
 // Config represents the project configuration
 type Config struct {
+	SiteName      string                `mapstructure:"site_name"`
 	Preset        string                `mapstructure:"preset"`
 	DefaultBranch string                `mapstructure:"default_branch"`
 	Scaffold      ScaffoldConfig        `mapstructure:"scaffold"`
@@ -141,6 +142,7 @@ func SaveProject(path string, config *Config) error {
 	v.AddConfigPath(path)
 
 	if err := v.MergeConfigMap(map[string]interface{}{
+		"site_name":      config.SiteName,
 		"preset":         config.Preset,
 		"default_branch": config.DefaultBranch,
 	}); err != nil {

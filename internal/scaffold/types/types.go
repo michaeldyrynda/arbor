@@ -16,6 +16,7 @@ type ScaffoldContext struct {
 	WorktreePath string
 	Branch       string
 	RepoName     string
+	SiteName     string
 	Preset       string
 	Env          map[string]string
 }
