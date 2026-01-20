@@ -52,14 +52,14 @@ Cleanup steps may include:
 			if targetWorktree == nil {
 				return fmt.Errorf("worktree '%s' not found: %w", folderName, arborerrors.ErrWorktreeNotFound)
 			}
-		} else if ui.ShouldPrompt(cmd, false) {
+		} else if ui.IsInteractive() {
 			selected, err := ui.SelectWorktreeToRemove(worktrees)
 			if err != nil {
 				return fmt.Errorf("selecting worktree: %w", err)
 			}
 			targetWorktree = selected
 		} else {
-			return fmt.Errorf("worktree folder name required")
+			return fmt.Errorf("worktree folder name required (run interactively or use --force to skip prompts)")
 		}
 
 		if targetWorktree.IsMain {
