@@ -81,7 +81,7 @@ func TestLoadGlobal_MissingConfig(t *testing.T) {
 func TestGetGlobalConfigDir_XDGSet(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", "/custom/config/path")
 
-	dir, err := getGlobalConfigDir()
+	dir, err := GetGlobalConfigDir()
 
 	assert.NoError(t, err)
 	assert.Equal(t, "/custom/config/path/arbor", dir)
@@ -93,7 +93,7 @@ func TestGetGlobalConfigDir_XDGNotSet(t *testing.T) {
 	home, err := os.UserHomeDir()
 	require.NoError(t, err)
 
-	dir, err := getGlobalConfigDir()
+	dir, err := GetGlobalConfigDir()
 
 	assert.NoError(t, err)
 	assert.Equal(t, filepath.Join(home, ".config", "arbor"), dir)

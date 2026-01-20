@@ -19,12 +19,16 @@ const (
 	ExitScaffoldStepFailed
 )
 
+const DefaultBranch = "main"
+
+var DefaultBranchCandidates = []string{"main", "master", "develop"}
+
 // Config represents the project configuration
 type Config struct {
-	Preset        string            `mapstructure:"preset"`
-	DefaultBranch string            `mapstructure:"default_branch"`
-	Scaffold      ScaffoldConfig    `mapstructure:"scaffold"`
-	Cleanup       []CleanupStep     `mapstructure:"cleanup"`
+	Preset        string                `mapstructure:"preset"`
+	DefaultBranch string                `mapstructure:"default_branch"`
+	Scaffold      ScaffoldConfig        `mapstructure:"scaffold"`
+	Cleanup       []CleanupStep         `mapstructure:"cleanup"`
 	Tools         map[string]ToolConfig `mapstructure:"tools"`
 }
 
@@ -59,10 +63,10 @@ type ToolConfig struct {
 
 // GlobalConfig represents the global configuration
 type GlobalConfig struct {
-	DefaultBranch     string                 `mapstructure:"default_branch"`
-	DetectedTools     map[string]bool        `mapstructure:"detected_tools"`
-	Tools             map[string]ToolInfo    `mapstructure:"tools"`
-	Scaffold          GlobalScaffoldConfig   `mapstructure:"scaffold"`
+	DefaultBranch string               `mapstructure:"default_branch"`
+	DetectedTools map[string]bool      `mapstructure:"detected_tools"`
+	Tools         map[string]ToolInfo  `mapstructure:"tools"`
+	Scaffold      GlobalScaffoldConfig `mapstructure:"scaffold"`
 }
 
 // ToolInfo represents detected tool information
@@ -102,7 +106,7 @@ func LoadProject(path string) (*Config, error) {
 
 // LoadGlobal loads global configuration from arbor.yaml
 func LoadGlobal() (*GlobalConfig, error) {
-	configDir, err := getGlobalConfigDir()
+	configDir, err := GetGlobalConfigDir()
 	if err != nil {
 		return nil, err
 	}
@@ -151,14 +155,12 @@ func SaveProject(path string, config *Config) error {
 	return nil
 }
 
-// getGlobalConfigDir returns the global config directory
-func getGlobalConfigDir() (string, error) {
-	// Check XDG_CONFIG_HOME first
+// GetGlobalConfigDir returns the global config directory
+func GetGlobalConfigDir() (string, error) {
 	if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
 		return filepath.Join(xdg, "arbor"), nil
 	}
 
-	// Fall back to HOME/.config
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("getting home directory: %w", err)
@@ -169,7 +171,7 @@ func getGlobalConfigDir() (string, error) {
 
 // CreateGlobalConfig creates the global config directory and file
 func CreateGlobalConfig(config *GlobalConfig) error {
-	configDir, err := getGlobalConfigDir()
+	configDir, err := GetGlobalConfigDir()
 	if err != nil {
 		return err
 	}
@@ -184,9 +186,9 @@ func CreateGlobalConfig(config *GlobalConfig) error {
 	v.AddConfigPath(configDir)
 
 	if err := v.MergeConfigMap(map[string]interface{}{
-		"default_branch":    config.DefaultBranch,
-		"detected_tools":    config.DetectedTools,
-		"scaffold":          config.Scaffold,
+		"default_branch": config.DefaultBranch,
+		"detected_tools": config.DetectedTools,
+		"scaffold":       config.Scaffold,
 	}); err != nil {
 		return fmt.Errorf("merging config: %w", err)
 	}

@@ -39,9 +39,9 @@ interactive review before removal.`,
 			return fmt.Errorf("loading project config: %w", err)
 		}
 
-		force, _ := cmd.Flags().GetBool("force")
-		dryRun, _ := cmd.Flags().GetBool("dry-run")
-		verbose, _ := cmd.Flags().GetBool("verbose")
+		force := mustGetBool(cmd, "force")
+		dryRun := mustGetBool(cmd, "dry-run")
+		verbose := mustGetBool(cmd, "verbose")
 
 		worktrees, err := git.ListWorktrees(barePath)
 		if err != nil {
@@ -52,7 +52,7 @@ interactive review before removal.`,
 		if defaultBranch == "" {
 			defaultBranch, _ = git.GetDefaultBranch(barePath)
 			if defaultBranch == "" {
-				defaultBranch = "main"
+				defaultBranch = config.DefaultBranch
 			}
 		}
 

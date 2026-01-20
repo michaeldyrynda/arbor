@@ -54,7 +54,7 @@ Arguments:
 
 		defaultBranch, err := git.GetDefaultBranch(barePath)
 		if err != nil {
-			defaultBranch = "main"
+			defaultBranch = config.DefaultBranch
 		}
 		fmt.Printf("Default branch: %s\n", defaultBranch)
 
@@ -69,8 +69,8 @@ Arguments:
 			DefaultBranch: defaultBranch,
 		}
 
-		preset, _ := cmd.Flags().GetString("preset")
-		interactive, _ := cmd.Flags().GetBool("interactive")
+		preset := mustGetString(cmd, "preset")
+		interactive := mustGetBool(cmd, "interactive")
 
 		if preset != "" {
 			cfg.Preset = preset
@@ -93,7 +93,7 @@ Arguments:
 			return fmt.Errorf("saving config: %w", err)
 		}
 
-		verbose, _ := cmd.Flags().GetBool("verbose")
+		verbose := mustGetBool(cmd, "verbose")
 
 		repoName := utils.SanitisePath(utils.ExtractRepoName(repo))
 

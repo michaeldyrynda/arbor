@@ -169,7 +169,7 @@ func joinArgs(args []string) string {
 	return result
 }
 
-func TestStepConditionEvaluator(t *testing.T) {
+func TestConditionEvaluator_viaContext(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	ctx := types.ScaffoldContext{
@@ -179,16 +179,14 @@ func TestStepConditionEvaluator(t *testing.T) {
 		Env:          make(map[string]string),
 	}
 
-	evaluator := NewStepConditionEvaluator(ctx)
-
 	t.Run("empty conditions returns true", func(t *testing.T) {
-		result, err := evaluator.Evaluate(map[string]interface{}{})
+		result, err := ctx.EvaluateCondition(map[string]interface{}{})
 		assert.NoError(t, err)
 		assert.True(t, result)
 	})
 
 	t.Run("nil conditions returns true", func(t *testing.T) {
-		result, err := evaluator.Evaluate(nil)
+		result, err := ctx.EvaluateCondition(nil)
 		assert.NoError(t, err)
 		assert.True(t, result)
 	})
@@ -198,7 +196,7 @@ func TestStepConditionEvaluator(t *testing.T) {
 			t.Fatalf("writing test file: %v", err)
 		}
 
-		result, err := evaluator.Evaluate(map[string]interface{}{
+		result, err := ctx.EvaluateCondition(map[string]interface{}{
 			"file_exists": "test.txt",
 		})
 		assert.NoError(t, err)
@@ -206,7 +204,7 @@ func TestStepConditionEvaluator(t *testing.T) {
 	})
 
 	t.Run("file_exists - file does not exist", func(t *testing.T) {
-		result, err := evaluator.Evaluate(map[string]interface{}{
+		result, err := ctx.EvaluateCondition(map[string]interface{}{
 			"file_exists": "nonexistent.txt",
 		})
 		assert.NoError(t, err)
@@ -218,7 +216,7 @@ func TestStepConditionEvaluator(t *testing.T) {
 			t.Fatalf("writing composer.json: %v", err)
 		}
 
-		result, err := evaluator.Evaluate(map[string]interface{}{
+		result, err := ctx.EvaluateCondition(map[string]interface{}{
 			"file_contains": map[string]interface{}{
 				"file":    "composer.json",
 				"pattern": "test/package",
@@ -231,7 +229,7 @@ func TestStepConditionEvaluator(t *testing.T) {
 	t.Run("file_contains - file does not contain pattern", func(t *testing.T) {
 		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "composer.json"), []byte(`{"name": "other/package"}`), 0644))
 
-		result, err := evaluator.Evaluate(map[string]interface{}{
+		result, err := ctx.EvaluateCondition(map[string]interface{}{
 			"file_contains": map[string]interface{}{
 				"file":    "composer.json",
 				"pattern": "missing/pattern",
@@ -242,7 +240,7 @@ func TestStepConditionEvaluator(t *testing.T) {
 	})
 
 	t.Run("command_exists - command exists", func(t *testing.T) {
-		result, err := evaluator.Evaluate(map[string]interface{}{
+		result, err := ctx.EvaluateCondition(map[string]interface{}{
 			"command_exists": "go",
 		})
 		assert.NoError(t, err)
@@ -250,7 +248,7 @@ func TestStepConditionEvaluator(t *testing.T) {
 	})
 
 	t.Run("command_exists - command does not exist", func(t *testing.T) {
-		result, err := evaluator.Evaluate(map[string]interface{}{
+		result, err := ctx.EvaluateCondition(map[string]interface{}{
 			"command_exists": "nonexistentcommand123",
 		})
 		assert.NoError(t, err)
@@ -258,7 +256,7 @@ func TestStepConditionEvaluator(t *testing.T) {
 	})
 
 	t.Run("os matches current OS", func(t *testing.T) {
-		result, err := evaluator.Evaluate(map[string]interface{}{
+		result, err := ctx.EvaluateCondition(map[string]interface{}{
 			"os": runtime.GOOS,
 		})
 		assert.NoError(t, err)
@@ -277,7 +275,7 @@ func TestStepConditionEvaluator(t *testing.T) {
 		default:
 			otherOS = "windows"
 		}
-		result, err := evaluator.Evaluate(map[string]interface{}{
+		result, err := ctx.EvaluateCondition(map[string]interface{}{
 			"os": otherOS,
 		})
 		assert.NoError(t, err)
@@ -287,7 +285,7 @@ func TestStepConditionEvaluator(t *testing.T) {
 	t.Run("env_exists - env variable exists", func(t *testing.T) {
 		t.Setenv("TEST_VAR_STEP", "value")
 
-		result, err := evaluator.Evaluate(map[string]interface{}{
+		result, err := ctx.EvaluateCondition(map[string]interface{}{
 			"env_exists": "TEST_VAR_STEP",
 		})
 		assert.NoError(t, err)
@@ -295,7 +293,7 @@ func TestStepConditionEvaluator(t *testing.T) {
 	})
 
 	t.Run("env_exists - env variable does not exist", func(t *testing.T) {
-		result, err := evaluator.Evaluate(map[string]interface{}{
+		result, err := ctx.EvaluateCondition(map[string]interface{}{
 			"env_exists": "NONEXISTENT_VAR_456",
 		})
 		assert.NoError(t, err)
@@ -303,7 +301,7 @@ func TestStepConditionEvaluator(t *testing.T) {
 	})
 
 	t.Run("env_not_exists - env variable does not exist", func(t *testing.T) {
-		result, err := evaluator.Evaluate(map[string]interface{}{
+		result, err := ctx.EvaluateCondition(map[string]interface{}{
 			"env_not_exists": "NONEXISTENT_VAR_789",
 		})
 		assert.NoError(t, err)
@@ -313,7 +311,7 @@ func TestStepConditionEvaluator(t *testing.T) {
 	t.Run("env_not_exists - env variable exists", func(t *testing.T) {
 		t.Setenv("TEST_VAR_STEP_EXISTS", "value")
 
-		result, err := evaluator.Evaluate(map[string]interface{}{
+		result, err := ctx.EvaluateCondition(map[string]interface{}{
 			"env_not_exists": "TEST_VAR_STEP_EXISTS",
 		})
 		assert.NoError(t, err)
@@ -323,7 +321,7 @@ func TestStepConditionEvaluator(t *testing.T) {
 	t.Run("env_file_contains - key exists in .env file", func(t *testing.T) {
 		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, ".env"), []byte("DB_CONNECTION=sqlite\nAPP_KEY=base64:value\n"), 0644))
 
-		result, err := evaluator.Evaluate(map[string]interface{}{
+		result, err := ctx.EvaluateCondition(map[string]interface{}{
 			"env_file_contains": map[string]interface{}{
 				"file": ".env",
 				"key":  "DB_CONNECTION",
@@ -336,7 +334,7 @@ func TestStepConditionEvaluator(t *testing.T) {
 	t.Run("env_file_contains - key does not exist in .env file", func(t *testing.T) {
 		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, ".env"), []byte("APP_KEY=base64:value\n"), 0644))
 
-		result, err := evaluator.Evaluate(map[string]interface{}{
+		result, err := ctx.EvaluateCondition(map[string]interface{}{
 			"env_file_contains": map[string]interface{}{
 				"file": ".env",
 				"key":  "DB_CONNECTION",
@@ -347,7 +345,7 @@ func TestStepConditionEvaluator(t *testing.T) {
 	})
 
 	t.Run("env_file_contains - .env file does not exist", func(t *testing.T) {
-		result, err := evaluator.Evaluate(map[string]interface{}{
+		result, err := ctx.EvaluateCondition(map[string]interface{}{
 			"env_file_contains": map[string]interface{}{
 				"file": ".env",
 				"key":  "DB_CONNECTION",
@@ -360,7 +358,7 @@ func TestStepConditionEvaluator(t *testing.T) {
 	t.Run("env_file_missing - .env file does not exist", func(t *testing.T) {
 		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, ".env"), []byte("OTHER_KEY=other_value\n"), 0644))
 
-		result, err := evaluator.Evaluate(map[string]interface{}{
+		result, err := ctx.EvaluateCondition(map[string]interface{}{
 			"env_file_missing": map[string]interface{}{
 				"file": ".env",
 				"key":  "APP_KEY",
@@ -373,7 +371,7 @@ func TestStepConditionEvaluator(t *testing.T) {
 	t.Run("env_file_missing - key does not exist", func(t *testing.T) {
 		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, ".env"), []byte("APP_KEY=base64:value\n"), 0644))
 
-		result, err := evaluator.Evaluate(map[string]interface{}{
+		result, err := ctx.EvaluateCondition(map[string]interface{}{
 			"env_file_missing": map[string]interface{}{
 				"file": ".env",
 				"key":  "DB_CONNECTION",
@@ -386,7 +384,7 @@ func TestStepConditionEvaluator(t *testing.T) {
 	t.Run("env_file_missing - key exists with value", func(t *testing.T) {
 		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, ".env"), []byte("APP_KEY=base64:value\n"), 0644))
 
-		result, err := evaluator.Evaluate(map[string]interface{}{
+		result, err := ctx.EvaluateCondition(map[string]interface{}{
 			"env_file_missing": map[string]interface{}{
 				"file": ".env",
 				"key":  "APP_KEY",
@@ -399,7 +397,7 @@ func TestStepConditionEvaluator(t *testing.T) {
 	t.Run("not condition - negates true condition", func(t *testing.T) {
 		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "test.txt"), []byte("test"), 0644))
 
-		result, err := evaluator.Evaluate(map[string]interface{}{
+		result, err := ctx.EvaluateCondition(map[string]interface{}{
 			"not": map[string]interface{}{
 				"file_exists": "test.txt",
 			},
@@ -409,7 +407,7 @@ func TestStepConditionEvaluator(t *testing.T) {
 	})
 
 	t.Run("not condition - negates false condition", func(t *testing.T) {
-		result, err := evaluator.Evaluate(map[string]interface{}{
+		result, err := ctx.EvaluateCondition(map[string]interface{}{
 			"not": map[string]interface{}{
 				"file_exists": "nonexistent.txt",
 			},
@@ -421,7 +419,7 @@ func TestStepConditionEvaluator(t *testing.T) {
 	t.Run("multiple conditions - all true", func(t *testing.T) {
 		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "test.txt"), []byte("test"), 0644))
 
-		result, err := evaluator.Evaluate(map[string]interface{}{
+		result, err := ctx.EvaluateCondition(map[string]interface{}{
 			"file_exists":    "test.txt",
 			"command_exists": "go",
 		})
@@ -432,7 +430,7 @@ func TestStepConditionEvaluator(t *testing.T) {
 	t.Run("multiple conditions - one false", func(t *testing.T) {
 		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "test.txt"), []byte("test"), 0644))
 
-		result, err := evaluator.Evaluate(map[string]interface{}{
+		result, err := ctx.EvaluateCondition(map[string]interface{}{
 			"file_exists":    "test.txt",
 			"command_exists": "nonexistentcommand123",
 		})
@@ -443,7 +441,7 @@ func TestStepConditionEvaluator(t *testing.T) {
 	t.Run("array condition via not - all conditions true", func(t *testing.T) {
 		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "test.txt"), []byte("test"), 0644))
 
-		result, err := evaluator.Evaluate(map[string]interface{}{
+		result, err := ctx.EvaluateCondition(map[string]interface{}{
 			"not": []interface{}{
 				map[string]interface{}{"file_exists": "test.txt"},
 				map[string]interface{}{"command_exists": "go"},
@@ -454,23 +452,51 @@ func TestStepConditionEvaluator(t *testing.T) {
 	})
 }
 
-func TestStepConditionEvaluator_DifferencesFromConditionEvaluator(t *testing.T) {
+func TestConditionEvaluator_fileHasScript(t *testing.T) {
+	tmpDir := t.TempDir()
+
 	ctx := types.ScaffoldContext{
-		WorktreePath: "/tmp",
+		WorktreePath: tmpDir,
 		Branch:       "test",
 	}
 
-	t.Run("file_has_script - NOT supported in StepConditionEvaluator", func(t *testing.T) {
-		evaluator := NewStepConditionEvaluator(ctx)
+	t.Run("file_has_script - script exists in package.json", func(t *testing.T) {
+		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "package.json"), []byte(`{"scripts": {"build": "echo build", "test": "echo test"}}`), 0644))
 
-		result, err := evaluator.Evaluate(map[string]interface{}{
+		result, err := ctx.EvaluateCondition(map[string]interface{}{
 			"file_has_script": "build",
 		})
-
 		assert.NoError(t, err)
-		assert.True(t, result, "file_has_script falls through to default (true) in StepConditionEvaluator since it's not implemented")
+		assert.True(t, result)
+	})
 
-		t.Log("Difference: file_has_script condition is supported in ConditionEvaluator but NOT in StepConditionEvaluator")
-		t.Log("This functionality must be preserved when unifying evaluators in Phase 2.1")
+	t.Run("file_has_script - script does not exist", func(t *testing.T) {
+		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "package.json"), []byte(`{"scripts": {"build": "echo build"}}`), 0644))
+
+		result, err := ctx.EvaluateCondition(map[string]interface{}{
+			"file_has_script": "deploy",
+		})
+		assert.NoError(t, err)
+		assert.False(t, result)
+	})
+
+	t.Run("file_has_script - package.json does not exist", func(t *testing.T) {
+		require.NoError(t, os.Remove(filepath.Join(tmpDir, "package.json")))
+
+		result, err := ctx.EvaluateCondition(map[string]interface{}{
+			"file_has_script": "build",
+		})
+		assert.NoError(t, err)
+		assert.False(t, result)
+	})
+
+	t.Run("file_has_script - empty script name", func(t *testing.T) {
+		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "package.json"), []byte(`{"scripts": {}}`), 0644))
+
+		result, err := ctx.EvaluateCondition(map[string]interface{}{
+			"file_has_script": "",
+		})
+		assert.NoError(t, err)
+		assert.False(t, result)
 	})
 }

@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"fmt"
+
 	"github.com/spf13/cobra"
 )
 
@@ -22,4 +24,20 @@ func Execute() error {
 func init() {
 	rootCmd.PersistentFlags().Bool("dry-run", false, "Preview operations without executing")
 	rootCmd.PersistentFlags().Bool("verbose", false, "Enable verbose output")
+}
+
+func mustGetString(cmd *cobra.Command, name string) string {
+	value, err := cmd.Flags().GetString(name)
+	if err != nil {
+		panic(fmt.Sprintf("programming error: flag %q not defined: %v", name, err))
+	}
+	return value
+}
+
+func mustGetBool(cmd *cobra.Command, name string) bool {
+	value, err := cmd.Flags().GetBool(name)
+	if err != nil {
+		panic(fmt.Sprintf("programming error: flag %q not defined: %v", name, err))
+	}
+	return value
 }

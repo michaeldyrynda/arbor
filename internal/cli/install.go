@@ -20,7 +20,7 @@ var installCmd = &cobra.Command{
 Creates the global arbor.yaml configuration file and detects
 available tools (gh, herd, php, composer, npm).`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		verbose, _ := cmd.Flags().GetBool("verbose")
+		verbose := mustGetBool(cmd, "verbose")
 
 		fmt.Printf("Arbor Global Configuration\n")
 		fmt.Printf(strings.Repeat("=", 40) + "\n\n")
@@ -28,7 +28,7 @@ available tools (gh, herd, php, composer, npm).`,
 		platform := runtime.GOOS
 		fmt.Printf("Platform: %s\n", platform)
 
-		configDir, err := getGlobalConfigDir()
+		configDir, err := config.GetGlobalConfigDir()
 		if err != nil {
 			return fmt.Errorf("getting config directory: %w", err)
 		}
@@ -65,7 +65,7 @@ available tools (gh, herd, php, composer, npm).`,
 		}
 
 		globalCfg := &config.GlobalConfig{
-			DefaultBranch: "main",
+			DefaultBranch: config.DefaultBranch,
 			DetectedTools: detectedTools,
 			Tools:         toolsInfo,
 			Scaffold: config.GlobalScaffoldConfig{
@@ -83,19 +83,6 @@ available tools (gh, herd, php, composer, npm).`,
 
 		return nil
 	},
-}
-
-func getGlobalConfigDir() (string, error) {
-	if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
-		return filepath.Join(xdg, "arbor"), nil
-	}
-
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("getting home directory: %w", err)
-	}
-
-	return filepath.Join(home, ".config", "arbor"), nil
 }
 
 func detectTool(name string) (string, string, error) {
@@ -139,9 +126,10 @@ func getToolVersion(name, path string) (string, error) {
 }
 
 func extractVersion(output, tool string) string {
+	lines := strings.Split(strings.TrimRight(output, "\n"), "\n")
 	switch tool {
 	case "gh":
-		for _, line := range splitLines(output) {
+		for _, line := range lines {
 			if strings.Contains(line, "gh version") {
 				parts := strings.Split(line, " ")
 				if len(parts) >= 3 {
@@ -150,7 +138,7 @@ func extractVersion(output, tool string) string {
 			}
 		}
 	case "php":
-		for _, line := range splitLines(output) {
+		for _, line := range lines {
 			if strings.Contains(line, "PHP") {
 				parts := strings.Split(line, " ")
 				if len(parts) >= 2 {
@@ -159,7 +147,7 @@ func extractVersion(output, tool string) string {
 			}
 		}
 	case "composer":
-		for _, line := range splitLines(output) {
+		for _, line := range lines {
 			if strings.Contains(line, "Composer version") {
 				parts := strings.Split(line, " ")
 				if len(parts) >= 3 {
@@ -168,13 +156,13 @@ func extractVersion(output, tool string) string {
 			}
 		}
 	case "npm":
-		for _, line := range splitLines(output) {
+		for _, line := range lines {
 			if strings.Contains(line, ".") {
 				return strings.TrimSpace(line)
 			}
 		}
 	case "herd":
-		for _, line := range splitLines(output) {
+		for _, line := range lines {
 			if strings.Contains(line, "version") || strings.Contains(line, "Herd") {
 				parts := strings.Fields(line)
 				for _, part := range parts {
@@ -187,21 +175,6 @@ func extractVersion(output, tool string) string {
 	}
 
 	return ""
-}
-
-func splitLines(s string) []string {
-	var lines []string
-	start := 0
-	for i, c := range s {
-		if c == '\n' {
-			lines = append(lines, s[start:i])
-			start = i + 1
-		}
-	}
-	if start < len(s) {
-		lines = append(lines, s[start:])
-	}
-	return lines
 }
 
 func init() {

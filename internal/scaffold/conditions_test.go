@@ -337,12 +337,12 @@ func TestConditionEvaluator_fileHasScript(t *testing.T) {
 		Env:          make(map[string]string),
 	}
 
-	evaluator := NewConditionEvaluator(ctx)
-
 	t.Run("package.json has script", func(t *testing.T) {
 		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "package.json"), []byte(`{"scripts": {"build": "vite build"}}`), 0644))
 
-		result, err := evaluator.fileHasScript("build")
+		result, err := ctx.EvaluateCondition(map[string]interface{}{
+			"file_has_script": "build",
+		})
 		require.NoError(t, err)
 		assert.True(t, result)
 	})
@@ -350,13 +350,17 @@ func TestConditionEvaluator_fileHasScript(t *testing.T) {
 	t.Run("package.json does not have script", func(t *testing.T) {
 		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "package.json"), []byte(`{"scripts": {"test": "jest"}}`), 0644))
 
-		result, err := evaluator.fileHasScript("build")
+		result, err := ctx.EvaluateCondition(map[string]interface{}{
+			"file_has_script": "build",
+		})
 		require.NoError(t, err)
 		assert.False(t, result)
 	})
 
 	t.Run("package.json does not exist", func(t *testing.T) {
-		result, err := evaluator.fileHasScript("build")
+		result, err := ctx.EvaluateCondition(map[string]interface{}{
+			"file_has_script": "build",
+		})
 		require.NoError(t, err)
 		assert.False(t, result)
 	})

@@ -41,14 +41,14 @@ and main branch highlighting.`,
 		if defaultBranch == "" {
 			defaultBranch, _ = git.GetDefaultBranch(barePath)
 			if defaultBranch == "" {
-				defaultBranch = "main"
+				defaultBranch = config.DefaultBranch
 			}
 		}
 
-		jsonOutput, _ := cmd.Flags().GetBool("json")
-		porcelain, _ := cmd.Flags().GetBool("porcelain")
-		sortBy, _ := cmd.Flags().GetString("sort-by")
-		reverse, _ := cmd.Flags().GetBool("reverse")
+		jsonOutput := mustGetBool(cmd, "json")
+		porcelain := mustGetBool(cmd, "porcelain")
+		sortBy := mustGetString(cmd, "sort-by")
+		reverse := mustGetBool(cmd, "reverse")
 
 		worktrees, err := git.ListWorktreesDetailed(barePath, cwd, defaultBranch)
 		if err != nil {

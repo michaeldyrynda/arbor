@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/michaeldyrynda/arbor/internal/config"
 )
 
 // Worktree represents a git worktree
@@ -57,7 +59,7 @@ func CreateWorktree(barePath, worktreePath, branch, baseBranch string) error {
 
 	// Branch doesn't exist, create from base
 	if baseBranch == "" {
-		baseBranch = "main"
+		baseBranch = config.DefaultBranch
 	}
 
 	gitArgs := []string{"-C", barePath, "worktree", "add", "-b", branch, worktreePath, baseBranch}
@@ -187,7 +189,7 @@ func SortWorktrees(worktrees []Worktree, by string, reverse bool) []Worktree {
 // GetDefaultBranch returns the default branch name
 func GetDefaultBranch(barePath string) (string, error) {
 	// Try main first, then master, then HEAD
-	for _, branch := range []string{"main", "master", "develop"} {
+	for _, branch := range config.DefaultBranchCandidates {
 		cmd := exec.Command("git", "-C", barePath, "rev-parse", "--verify", "--quiet", "refs/heads/"+branch)
 		if err := cmd.Run(); err == nil {
 			return branch, nil

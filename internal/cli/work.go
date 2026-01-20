@@ -48,10 +48,10 @@ available branches or entering a new branch name.`,
 			return fmt.Errorf("loading project config: %w", err)
 		}
 
-		baseBranch, _ := cmd.Flags().GetString("base")
-		interactive, _ := cmd.Flags().GetBool("interactive")
-		dryRun, _ := cmd.Flags().GetBool("dry-run")
-		verbose, _ := cmd.Flags().GetBool("verbose")
+		baseBranch := mustGetString(cmd, "base")
+		interactive := mustGetBool(cmd, "interactive")
+		dryRun := mustGetBool(cmd, "dry-run")
+		verbose := mustGetBool(cmd, "verbose")
 
 		var branch string
 		if len(args) > 0 {
@@ -73,7 +73,7 @@ available branches or entering a new branch name.`,
 			if baseBranch == "" {
 				baseBranch, _ = git.GetDefaultBranch(barePath)
 				if baseBranch == "" {
-					baseBranch = "main"
+					baseBranch = config.DefaultBranch
 				}
 			}
 		}
