@@ -68,6 +68,7 @@ Cleanup steps may include:
 
 		ui.PrintInfo(fmt.Sprintf("Removing %s at %s", targetWorktree.Branch, targetWorktree.Path))
 
+		deleteBranch := false
 		if !force && ui.ShouldPrompt(cmd, true) {
 			ui.PrintInfo("This will run cleanup steps.")
 			confirmed, err := ui.Confirm(fmt.Sprintf("Remove worktree '%s'?", targetWorktree.Branch))
@@ -78,6 +79,15 @@ Cleanup steps may include:
 				ui.PrintInfo("Cancelled.")
 				return nil
 			}
+
+			if git.BranchExists(pc.BarePath, targetWorktree.Branch) {
+				deleteBranch, err = ui.Confirm(fmt.Sprintf("Also delete branch '%s'?", targetWorktree.Branch))
+				if err != nil {
+					return fmt.Errorf("branch deletion confirmation: %w", err)
+				}
+			}
+		} else {
+			deleteBranch = mustGetBool(cmd, "delete-branch")
 		}
 
 		ui.PrintStep("Removing worktree")
@@ -103,7 +113,6 @@ Cleanup steps may include:
 			}
 			ui.PrintSuccessPath("Removed", targetWorktree.Path)
 
-			deleteBranch := mustGetBool(cmd, "delete-branch")
 			if deleteBranch && git.BranchExists(pc.BarePath, targetWorktree.Branch) {
 				if err := git.DeleteBranch(pc.BarePath, targetWorktree.Branch, force); err != nil {
 					ui.PrintErrorWithHint("Failed to delete branch", err.Error())
@@ -121,7 +130,7 @@ Cleanup steps may include:
 			}
 		} else {
 			ui.PrintInfo("[DRY RUN] Would run cleanup and remove worktree")
-			if mustGetBool(cmd, "delete-branch") {
+			if deleteBranch {
 				ui.PrintInfo("[DRY RUN] Would delete branch")
 			}
 		}
