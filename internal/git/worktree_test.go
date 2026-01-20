@@ -5,6 +5,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func createTestRepo(t *testing.T) (string, string) {
@@ -795,4 +797,123 @@ func TestSortWorktrees_DefaultIsByName(t *testing.T) {
 			t.Errorf("expected worktree %d to be %s, got %s", i, expected[i], name)
 		}
 	}
+}
+
+func TestIsMerged_InvalidBranch(t *testing.T) {
+	barePath, _ := createTestRepo(t)
+
+	merged, err := IsMerged(barePath, "nonexistent-branch-12345", "main")
+
+	t.Logf("Current behavior: IsMerged with invalid branch returns (%v, %v)", merged, err)
+
+	assert.False(t, merged, "invalid branch should return false for merged status")
+}
+
+func TestIsMerged_GitFailure(t *testing.T) {
+	invalidPath := "/nonexistent/path/that/is/not/a/git/repo"
+
+	merged, err := IsMerged(invalidPath, "main", "develop")
+
+	t.Logf("Current behavior: IsMerged with invalid repo path returns (%v, %v)", merged, err)
+
+	assert.False(t, merged, "invalid repository should return false for merged status")
+}
+
+func TestListWorktrees_PorcelainParsing_AbsolutePaths(t *testing.T) {
+	barePath, _ := createTestRepo(t)
+	projectDir := filepath.Dir(barePath)
+
+	mainPath := filepath.Join(projectDir, "main")
+	if err := CreateWorktree(barePath, mainPath, "main", ""); err != nil {
+		t.Fatalf("creating main worktree: %v", err)
+	}
+
+	absMainPath, err := filepath.Abs(mainPath)
+	if err != nil {
+		t.Fatalf("getting absolute path: %v", err)
+	}
+
+	worktrees, err := ListWorktrees(barePath)
+	if err != nil {
+		t.Fatalf("listing worktrees: %v", err)
+	}
+
+	assert.Len(t, worktrees, 1)
+
+	found := false
+	for _, wt := range worktrees {
+		if wt.Branch == "main" {
+			found = true
+			t.Logf("Current path handling: got path %s", wt.Path)
+			assert.Equal(t, absMainPath, wt.Path, "absolute path should be preserved")
+			break
+		}
+	}
+
+	assert.True(t, found, "main worktree should be in list")
+}
+
+func TestListWorktrees_PorcelainParsing_PathsWithSpaces(t *testing.T) {
+	barePath, _ := createTestRepo(t)
+	projectDir := filepath.Dir(barePath)
+
+	spacePath := filepath.Join(projectDir, "my feature branch")
+	if err := CreateWorktree(barePath, spacePath, "feature", "main"); err != nil {
+		t.Fatalf("creating worktree with spaces in path: %v", err)
+	}
+
+	worktrees, err := ListWorktrees(barePath)
+	if err != nil {
+		t.Fatalf("listing worktrees: %v", err)
+	}
+
+	found := false
+	for _, wt := range worktrees {
+		if wt.Branch == "feature" {
+			found = true
+			t.Logf("Current path handling for spaces: got path %s", wt.Path)
+			assert.Contains(t, wt.Path, "my feature branch", "path with spaces should be preserved")
+			break
+		}
+	}
+
+	assert.True(t, found, "feature worktree should be in list")
+}
+
+func TestListWorktrees_PorcelainParsing_CurrentBehavior(t *testing.T) {
+	barePath, _ := createTestRepo(t)
+	projectDir := filepath.Dir(barePath)
+
+	mainPath := filepath.Join(projectDir, "main")
+	if err := CreateWorktree(barePath, mainPath, "main", ""); err != nil {
+		t.Fatalf("creating main worktree: %v", err)
+	}
+
+	featurePath := filepath.Join(projectDir, "feature")
+	if err := CreateWorktree(barePath, featurePath, "feature", "main"); err != nil {
+		t.Fatalf("creating feature worktree: %v", err)
+	}
+
+	worktrees, err := ListWorktrees(barePath)
+	if err != nil {
+		t.Fatalf("listing worktrees: %v", err)
+	}
+
+	assert.Len(t, worktrees, 2, "should have main and feature worktrees")
+
+	for _, wt := range worktrees {
+		t.Logf("Parsed worktree: branch=%s, path=%s", wt.Branch, wt.Path)
+	}
+
+	mainWt := func() *Worktree {
+		for _, wt := range worktrees {
+			if wt.Branch == "main" {
+				return &wt
+			}
+		}
+		return nil
+	}()
+
+	assert.NotNil(t, mainWt, "main worktree should exist")
+	assert.Equal(t, "main", mainWt.Branch)
 }

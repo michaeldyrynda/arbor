@@ -2,6 +2,7 @@ package scaffold
 
 import (
 	"testing"
+	"time"
 
 	"github.com/michaeldyrynda/arbor/internal/scaffold/types"
 	"github.com/stretchr/testify/assert"
@@ -203,4 +204,60 @@ func TestStepExecutor_Results(t *testing.T) {
 	assert.False(t, results[0].Skipped)
 	assert.Equal(t, "step2", results[1].Step.Name())
 	assert.True(t, results[1].Skipped)
+}
+
+func TestStepExecutor_ParallelExecution_SamePriority(t *testing.T) {
+	ctx := types.ScaffoldContext{
+		WorktreePath: "/tmp",
+		Branch:       "test",
+	}
+
+	step1 := &mockStep{name: "step1", priority: 10, conditionResult: true}
+	step2 := &mockStep{name: "step2", priority: 10, conditionResult: true}
+	step3 := &mockStep{name: "step3", priority: 10, conditionResult: true}
+
+	executor := NewStepExecutor([]types.ScaffoldStep{step1, step2, step3}, ctx, types.StepOptions{
+		DryRun:  false,
+		Verbose: false,
+	})
+
+	start := time.Now()
+	err := executor.Execute()
+	elapsed := time.Since(start)
+
+	assert.NoError(t, err)
+	assert.True(t, step1.runCalled)
+	assert.True(t, step2.runCalled)
+	assert.True(t, step3.runCalled)
+
+	assert.Less(t, elapsed.Milliseconds(), int64(250),
+		"steps with same priority should run in parallel (each sleeps 100ms), not serialized (would be >=300ms)")
+}
+
+func TestStepExecutor_ParallelExecution_ErrorPropagation(t *testing.T) {
+	ctx := types.ScaffoldContext{
+		WorktreePath: "/tmp",
+		Branch:       "test",
+	}
+
+	step1 := &mockStep{name: "step1", priority: 10, conditionResult: true}
+	step2 := &mockStep{name: "step2", priority: 10, conditionResult: true, runError: assert.AnError}
+	step3 := &mockStep{name: "step3", priority: 10, conditionResult: true}
+
+	executor := NewStepExecutor([]types.ScaffoldStep{step1, step2, step3}, ctx, types.StepOptions{
+		DryRun:  false,
+		Verbose: false,
+	})
+
+	err := executor.Execute()
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "step2 failed")
+	assert.True(t, step1.runCalled)
+	assert.True(t, step2.runCalled)
+	assert.True(t, step3.runCalled)
+}
+
+func TestStepExecutor_ParallelExecution_RaceCondition(t *testing.T) {
+	t.Skip("SKIP: Race condition test - data race exists until Phase 1.1 fixes it")
 }
