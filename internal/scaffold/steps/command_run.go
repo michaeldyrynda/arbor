@@ -1,6 +1,7 @@
 package steps
 
 import (
+	"fmt"
 	"os/exec"
 
 	"github.com/michaeldyrynda/arbor/internal/scaffold/types"
@@ -21,7 +22,11 @@ func (s *CommandRunStep) Name() string {
 func (s *CommandRunStep) Run(ctx types.ScaffoldContext, opts types.StepOptions) error {
 	cmd := exec.Command("sh", "-c", s.command)
 	cmd.Dir = ctx.WorktreePath
-	return cmd.Run()
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("command.run failed: %w\n%s", err, string(output))
+	}
+	return nil
 }
 
 func (s *CommandRunStep) Priority() int {

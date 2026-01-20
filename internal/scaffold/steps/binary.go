@@ -72,7 +72,11 @@ func (s *BinaryStep) Run(ctx types.ScaffoldContext, opts types.StepOptions) erro
 	}
 	cmd := exec.Command(strings.Fields(s.binary)[0], append(strings.Fields(s.binary)[1:], allArgs...)...)
 	cmd.Dir = ctx.WorktreePath
-	return cmd.Run()
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("%s failed: %w\n%s", s.name, err, string(output))
+	}
+	return nil
 }
 
 func (s *BinaryStep) replaceTemplate(args []string, ctx types.ScaffoldContext) []string {

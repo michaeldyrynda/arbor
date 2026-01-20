@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/michaeldyrynda/arbor/internal/config"
+	arborerrors "github.com/michaeldyrynda/arbor/internal/errors"
 )
 
 // Worktree represents a git worktree
@@ -35,8 +36,9 @@ func CreateBareRepo(path string) error {
 	cmd := exec.Command("git", "init", "--bare")
 	cmd.Dir = path
 
-	if err := cmd.Run(); err != nil {
-		return err
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("git init failed: %w\n%s", err, string(output))
 	}
 
 	return nil
@@ -54,7 +56,11 @@ func CreateWorktree(barePath, worktreePath, branch, baseBranch string) error {
 	if err := cmd.Run(); err == nil {
 		// Branch exists, just checkout
 		cmd = exec.Command("git", "-C", barePath, "worktree", "add", worktreePath, branch)
-		return cmd.Run()
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("git worktree add failed: %w\n%s", err, string(output))
+		}
+		return nil
 	}
 
 	// Branch doesn't exist, create from base
@@ -64,7 +70,11 @@ func CreateWorktree(barePath, worktreePath, branch, baseBranch string) error {
 
 	gitArgs := []string{"-C", barePath, "worktree", "add", "-b", branch, worktreePath, baseBranch}
 	cmd = exec.Command("git", gitArgs...)
-	return cmd.Run()
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("git worktree add failed: %w\n%s", err, string(output))
+	}
+	return nil
 }
 
 // RemoveWorktree removes a worktree
@@ -81,7 +91,11 @@ func RemoveWorktree(worktreePath string, force bool) error {
 	}
 
 	cmd := exec.Command("git", append([]string{"-C", barePath}, args...)...)
-	return cmd.Run()
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("git worktree remove failed: %w\n%s", err, string(output))
+	}
+	return nil
 }
 
 // ListWorktrees lists all worktrees in a bare repository
@@ -224,7 +238,11 @@ func CloneRepo(repoURL, barePath string) error {
 	}
 
 	cmd := exec.Command("git", "clone", "--bare", repoURL, barePath)
-	return cmd.Run()
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("git clone failed: %w\n%s", err, string(output))
+	}
+	return nil
 }
 
 // CloneRepoWithGH clones a repository using gh CLI (supports short format)
@@ -234,7 +252,11 @@ func CloneRepoWithGH(repo, barePath string) error {
 	}
 
 	cmd := exec.Command("gh", "repo", "clone", repo, barePath, "--", "--bare")
-	return cmd.Run()
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("gh repo clone failed: %w\n%s", err, string(output))
+	}
+	return nil
 }
 
 // IsMerged checks if a branch is merged into another branch
@@ -352,7 +374,7 @@ func FindBarePath(worktreePath string) (string, error) {
 
 		parent := filepath.Dir(current)
 		if parent == current {
-			return "", fmt.Errorf(".bare not found in %s or any parent directory", absPath)
+			return "", fmt.Errorf(".bare not found in %s or any parent directory: %w", absPath, arborerrors.ErrWorktreeNotFound)
 		}
 		current = parent
 	}
@@ -370,8 +392,9 @@ func InitFromWorktree(worktreePath, barePath, defaultBranch string) error {
 
 	cmd := exec.Command("git", "push", "--mirror")
 	cmd.Dir = worktreePath
-	if err := cmd.Run(); err != nil {
-		return err
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("git push --mirror failed: %w\n%s", err, string(output))
 	}
 
 	mainPath := filepath.Join(filepath.Dir(worktreePath), defaultBranch)

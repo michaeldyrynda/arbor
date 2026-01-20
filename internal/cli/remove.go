@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/michaeldyrynda/arbor/internal/config"
+	arborerrors "github.com/michaeldyrynda/arbor/internal/errors"
 	"github.com/michaeldyrynda/arbor/internal/git"
 	"github.com/michaeldyrynda/arbor/internal/presets"
 	"github.com/michaeldyrynda/arbor/internal/scaffold"
@@ -63,7 +64,7 @@ Cleanup steps may include:
 		}
 
 		if targetWorktree == nil {
-			return fmt.Errorf("worktree '%s' not found", folderName)
+			return fmt.Errorf("worktree '%s' not found: %w", folderName, arborerrors.ErrWorktreeNotFound)
 		}
 
 		if !force {
