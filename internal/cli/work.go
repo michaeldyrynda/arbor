@@ -31,14 +31,13 @@ available branches or entering a new branch name.`,
 		}
 
 		baseBranch := mustGetString(cmd, "base")
-		interactive := mustGetBool(cmd, "interactive")
 		dryRun := mustGetBool(cmd, "dry-run")
 		verbose := mustGetBool(cmd, "verbose")
 
 		var branch string
 		if len(args) > 0 {
 			branch = args[0]
-		} else if interactive {
+		} else if ui.ShouldPrompt(cmd, false) {
 			localBranches, err := git.ListAllBranches(pc.BarePath)
 			if err != nil {
 				return fmt.Errorf("listing local branches: %w", err)
@@ -54,7 +53,7 @@ available branches or entering a new branch name.`,
 		}
 
 		if branch == "" {
-			return fmt.Errorf("branch name is required (or use --interactive)")
+			return fmt.Errorf("branch name required (run without arguments for interactive mode)")
 		}
 
 		if baseBranch == "" {
@@ -81,21 +80,21 @@ available branches or entering a new branch name.`,
 			}
 			for _, wt := range worktrees {
 				if wt.Branch == branch {
-					fmt.Printf("Worktree already exists at %s\n", wt.Path)
+					ui.PrintInfo(fmt.Sprintf("Worktree already exists at %s", wt.Path))
 					return nil
 				}
 			}
 		}
 
-		fmt.Printf("Creating worktree for branch '%s' from '%s'\n", branch, baseBranch)
-		fmt.Printf("Path: %s\n", absWorktreePath)
+		ui.PrintStep(fmt.Sprintf("Creating worktree for branch '%s' from '%s'", branch, baseBranch))
+		ui.PrintInfo(fmt.Sprintf("Path: %s", absWorktreePath))
 
 		if !dryRun {
 			if err := git.CreateWorktree(pc.BarePath, absWorktreePath, branch, baseBranch); err != nil {
 				return fmt.Errorf("creating worktree: %w", err)
 			}
 		} else {
-			fmt.Println("[DRY RUN] Would create worktree")
+			ui.PrintInfo("[DRY RUN] Would create worktree")
 		}
 
 		if !dryRun {
@@ -104,19 +103,19 @@ available branches or entering a new branch name.`,
 				preset = pc.PresetManager().Detect(absWorktreePath)
 			}
 
-			if verbose {
-				fmt.Printf("Running scaffold for preset: %s\n", preset)
+			if verbose && preset != "" {
+				ui.PrintInfo(fmt.Sprintf("Running scaffold for preset: %s", preset))
 			}
 
 			repoName := filepath.Base(filepath.Dir(absWorktreePath))
 			if err := pc.ScaffoldManager().RunScaffold(absWorktreePath, branch, repoName, preset, pc.Config, false, verbose); err != nil {
-				fmt.Printf("Warning: scaffold steps failed: %v\n", err)
+				ui.PrintErrorWithHint("Scaffold steps failed", err.Error())
 			}
 		} else {
-			fmt.Println("[DRY RUN] Would run scaffold steps")
+			ui.PrintInfo("[DRY RUN] Would run scaffold steps")
 		}
 
-		fmt.Printf("\nWorktree ready at %s\n", absWorktreePath)
+		ui.PrintDone(fmt.Sprintf("Worktree ready at %s", absWorktreePath))
 		return nil
 	},
 }
@@ -130,5 +129,4 @@ func init() {
 	rootCmd.AddCommand(workCmd)
 
 	workCmd.Flags().StringP("base", "b", "", "Base branch for new worktree")
-	workCmd.Flags().Bool("interactive", false, "Interactive branch selection")
 }

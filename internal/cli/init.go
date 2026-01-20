@@ -22,9 +22,21 @@ var initCmd = &cobra.Command{
 Arguments:
   REPO  Repository URL (supports both full URLs and short GH format)
   PATH  Optional target directory (defaults to repository basename)`,
-	Args: cobra.MinimumNArgs(1),
+	Args: cobra.MaximumNArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		repo := args[0]
+		var repo string
+
+		if len(args) > 0 {
+			repo = args[0]
+		} else if ui.ShouldPrompt(cmd, false) {
+			input, err := ui.PromptRepoURL()
+			if err != nil {
+				return fmt.Errorf("prompting for repository: %w", err)
+			}
+			repo = input
+		} else {
+			return fmt.Errorf("repository URL required")
+		}
 
 		path := ""
 		if len(args) > 1 {
@@ -77,7 +89,6 @@ Arguments:
 		}
 
 		preset := mustGetString(cmd, "preset")
-		interactive := mustGetBool(cmd, "interactive")
 
 		presetManager := presets.NewManager()
 		scaffoldManager := scaffold.NewScaffoldManager()
@@ -85,18 +96,18 @@ Arguments:
 
 		if preset != "" {
 			cfg.Preset = preset
-		} else if interactive {
-			suggested := presetManager.Suggest(mainPath)
-			selected, err := presets.PromptForPreset(presetManager, suggested)
-			if err != nil {
-				return fmt.Errorf("prompting for preset: %w", err)
-			}
-			cfg.Preset = selected
 		} else {
 			detected := presetManager.Detect(mainPath)
 			if detected != "" {
 				cfg.Preset = detected
 				ui.PrintSuccess(fmt.Sprintf("Detected: %s", detected))
+			} else if ui.ShouldPrompt(cmd, true) {
+				suggested := presetManager.Suggest(mainPath)
+				selected, err := presets.PromptForPreset(presetManager, suggested)
+				if err != nil {
+					return fmt.Errorf("prompting for preset: %w", err)
+				}
+				cfg.Preset = selected
 			}
 		}
 
@@ -128,5 +139,4 @@ func init() {
 	rootCmd.AddCommand(initCmd)
 
 	initCmd.Flags().String("preset", "", "Project preset (laravel, php)")
-	initCmd.Flags().Bool("interactive", false, "Interactive preset selection")
 }

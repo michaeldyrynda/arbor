@@ -3,9 +3,9 @@ package cli
 import (
 	"fmt"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 
-	"github.com/charmbracelet/lipgloss"
 	"github.com/michaeldyrynda/arbor/internal/ui"
 )
 
@@ -16,7 +16,7 @@ var rootCmd = &cobra.Command{
 to assist with agentic development of applications.
 It is cross-project, cross-language, and cross-environment compatible.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if noColor || !isTerminal() {
+		if noColor || !ui.IsInteractive() {
 			return cmd.Help()
 		}
 		printBanner()
@@ -53,14 +53,6 @@ func printBanner() {
 	fmt.Println(style.Render(banner))
 }
 
-func isTerminal() bool {
-	return noColor == false && isStdoutTTY()
-}
-
-func isStdoutTTY() bool {
-	return true
-}
-
 func Execute() error {
 	return rootCmd.Execute()
 }
@@ -69,7 +61,7 @@ func init() {
 	rootCmd.PersistentFlags().Bool("dry-run", false, "Preview operations without executing")
 	rootCmd.PersistentFlags().Bool("verbose", false, "Enable verbose output")
 	rootCmd.PersistentFlags().BoolVar(&noColor, "no-color", false, "Disable colored output")
-	rootCmd.PersistentFlags().Bool("interactive", false, "Enable interactive prompts")
+	rootCmd.PersistentFlags().Bool("no-interactive", false, "Disable interactive prompts")
 }
 
 func mustGetString(cmd *cobra.Command, name string) string {

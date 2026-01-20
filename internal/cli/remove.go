@@ -23,10 +23,8 @@ Arguments:
 Cleanup steps may include:
   - Removing Herd site links
   - Database cleanup prompts`,
-	Args: cobra.ExactArgs(1),
+	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		folderName := args[0]
-
 		pc, err := OpenProjectFromCWD()
 		if err != nil {
 			return err
@@ -42,20 +40,35 @@ Cleanup steps may include:
 		}
 
 		var targetWorktree *git.Worktree
-		for _, wt := range worktrees {
-			if filepath.Base(wt.Path) == folderName {
-				targetWorktree = &wt
-				break
+
+		if len(args) > 0 {
+			folderName := args[0]
+			for _, wt := range worktrees {
+				if filepath.Base(wt.Path) == folderName {
+					targetWorktree = &wt
+					break
+				}
 			}
+			if targetWorktree == nil {
+				return fmt.Errorf("worktree '%s' not found: %w", folderName, arborerrors.ErrWorktreeNotFound)
+			}
+		} else if ui.ShouldPrompt(cmd, false) {
+			selected, err := ui.SelectWorktreeToRemove(worktrees)
+			if err != nil {
+				return fmt.Errorf("selecting worktree: %w", err)
+			}
+			targetWorktree = selected
+		} else {
+			return fmt.Errorf("worktree folder name required")
 		}
 
-		if targetWorktree == nil {
-			return fmt.Errorf("worktree '%s' not found: %w", folderName, arborerrors.ErrWorktreeNotFound)
+		if targetWorktree.IsMain {
+			return fmt.Errorf("cannot remove main worktree")
 		}
 
 		ui.PrintInfo(fmt.Sprintf("Removing %s at %s", targetWorktree.Branch, targetWorktree.Path))
 
-		if !force {
+		if !force && ui.ShouldPrompt(cmd, true) {
 			ui.PrintInfo("This will run cleanup steps.")
 			confirmed, err := ui.Confirm(fmt.Sprintf("Remove worktree '%s'?", targetWorktree.Branch))
 			if err != nil {

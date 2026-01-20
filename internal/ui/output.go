@@ -58,11 +58,13 @@ func PrintErrorWithHint(msg, hint string) {
 
 func RunWithSpinner(title string, action func() error) error {
 	var err error
-	spinner.New().
+	sp := spinner.New().
 		Title(title).
 		Action(func() {
 			err = action()
-		}).
-		Run()
+		})
+	if runErr := sp.Run(); runErr != nil {
+		return runErr
+	}
 	return err
 }

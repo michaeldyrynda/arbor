@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 
 	"github.com/charmbracelet/huh"
+
 	"github.com/michaeldyrynda/arbor/internal/git"
 )
 
@@ -152,4 +153,80 @@ func Confirm(message string) (bool, error) {
 	}
 
 	return confirmed, nil
+}
+
+func PromptRepoURL() (string, error) {
+	var repo string
+
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewInput().
+				Title("Repository").
+				Description("GitHub URL or owner/repo format").
+				Placeholder("owner/repo or git@github.com:owner/repo.git").
+				Value(&repo).
+				Validate(validateRepoURL),
+		),
+	).WithTheme(huh.ThemeCatppuccin())
+
+	if err := form.Run(); err != nil {
+		return "", err
+	}
+
+	return repo, nil
+}
+
+func validateRepoURL(s string) error {
+	if s == "" {
+		return fmt.Errorf("repository URL cannot be empty")
+	}
+	if len(s) < 3 {
+		return fmt.Errorf("repository URL must be at least 3 characters")
+	}
+	return nil
+}
+
+func SelectWorktreeToRemove(worktrees []git.Worktree) (*git.Worktree, error) {
+	var removable []git.Worktree
+	for _, wt := range worktrees {
+		if !wt.IsMain {
+			removable = append(removable, wt)
+		}
+	}
+
+	if len(removable) == 0 {
+		return nil, fmt.Errorf("no worktrees available to remove")
+	}
+
+	options := make([]huh.Option[string], len(removable))
+	for i, wt := range removable {
+		status := ""
+		if wt.IsMerged {
+			status = " (merged)"
+		}
+		label := fmt.Sprintf("%s%s", wt.Branch, status)
+		options[i] = huh.NewOption(label, wt.Branch)
+	}
+
+	var selected string
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewSelect[string]().
+				Title("Select worktree to remove").
+				Options(options...).
+				Value(&selected),
+		),
+	).WithTheme(huh.ThemeCatppuccin())
+
+	if err := form.Run(); err != nil {
+		return nil, err
+	}
+
+	for _, wt := range removable {
+		if wt.Branch == selected {
+			return &wt, nil
+		}
+	}
+
+	return nil, fmt.Errorf("worktree not found")
 }
