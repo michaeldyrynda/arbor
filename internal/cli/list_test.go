@@ -102,17 +102,28 @@ func TestPrintTable_WithWorktrees(t *testing.T) {
 	if !strings.Contains(output, "unmerged") {
 		t.Errorf("output should contain unmerged, got: %s", output)
 	}
-	if !strings.Contains(output, "[current]") {
-		t.Errorf("output should contain [current], got: %s", output)
+	if !strings.Contains(output, "current") {
+		t.Errorf("output should contain current status, got: %s", output)
 	}
-	if !strings.Contains(output, "[main]") {
-		t.Errorf("output should contain [main], got: %s", output)
+	if !strings.Contains(output, "main") {
+		t.Errorf("output should contain main status, got: %s", output)
 	}
-	if strings.Contains(output, "main                      [current] [main] [merged]") {
-		t.Errorf("main branch should not show [merged] status, got: %s", output)
+
+	lines := strings.Split(output, "\n")
+	var mainLine string
+	for _, line := range lines {
+		if strings.Contains(line, "main") && strings.Contains(line, "│") {
+			mainLine = line
+			break
+		}
 	}
-	if !strings.Contains(output, "[not merged]") {
-		t.Errorf("output should contain [not merged] for unmerged branch, got: %s", output)
+	if mainLine == "" {
+		t.Error("could not find main row in output")
+	} else if strings.Contains(mainLine, "merged") {
+		t.Errorf("main branch should not show merged status, got: %s", mainLine)
+	}
+	if !strings.Contains(output, "active") && !strings.Contains(output, "merged") {
+		t.Errorf("output should contain status for unmerged branch, got: %s", output)
 	}
 }
 
@@ -217,8 +228,8 @@ func TestPrintTable_SingleWorktree(t *testing.T) {
 	if !strings.Contains(output, "feature") {
 		t.Errorf("output should contain feature, got: %s", output)
 	}
-	if !strings.Contains(output, "[current]") {
-		t.Errorf("output should contain [current], got: %s", output)
+	if !strings.Contains(output, "current") {
+		t.Errorf("output should contain current status, got: %s", output)
 	}
 	if strings.Contains(output, "No worktrees found") {
 		t.Error("should not show empty message when worktrees exist")

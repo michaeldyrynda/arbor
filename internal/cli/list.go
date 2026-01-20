@@ -5,12 +5,11 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
-	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/michaeldyrynda/arbor/internal/git"
+	"github.com/michaeldyrynda/arbor/internal/ui"
 )
 
 var listCmd = &cobra.Command{
@@ -56,63 +55,8 @@ func printTable(w io.Writer, worktrees []git.Worktree) error {
 		return nil
 	}
 
-	maxWorktreeLen := 8 // "WORKTREE" length
-	maxBranchLen := 6   // "BRANCH" length
-	maxStatusLen := 6   // "STATUS" length
-
-	for _, wt := range worktrees {
-		worktreeName := filepath.Base(wt.Path)
-		if len(worktreeName) > maxWorktreeLen {
-			maxWorktreeLen = len(worktreeName)
-		}
-		if len(wt.Branch) > maxBranchLen {
-			maxBranchLen = len(wt.Branch)
-		}
-
-		statusParts := []string{}
-		if wt.IsCurrent {
-			statusParts = append(statusParts, "[current]")
-		}
-		if wt.IsMain {
-			statusParts = append(statusParts, "[main]")
-		} else if wt.IsMerged {
-			statusParts = append(statusParts, "[merged]")
-		} else {
-			statusParts = append(statusParts, "[not merged]")
-		}
-		status := strings.Join(statusParts, " ")
-		if len(status) > maxStatusLen {
-			maxStatusLen = len(status)
-		}
-	}
-
-	headerFormat := fmt.Sprintf("%%-%ds %%-%ds %%s\n", maxWorktreeLen, maxBranchLen)
-	rowFormat := fmt.Sprintf("%%-%ds %%-%ds %%s\n", maxWorktreeLen, maxBranchLen)
-	separator := strings.Repeat("-", maxWorktreeLen+maxBranchLen+maxStatusLen+2)
-
-	fmt.Fprintf(w, headerFormat, "WORKTREE", "BRANCH", "STATUS")
-	fmt.Fprintln(w, separator)
-
-	for _, wt := range worktrees {
-		worktreeName := filepath.Base(wt.Path)
-
-		statusParts := []string{}
-		if wt.IsCurrent {
-			statusParts = append(statusParts, "[current]")
-		}
-		if wt.IsMain {
-			statusParts = append(statusParts, "[main]")
-		} else if wt.IsMerged {
-			statusParts = append(statusParts, "[merged]")
-		} else {
-			statusParts = append(statusParts, "[not merged]")
-		}
-		status := strings.Join(statusParts, " ")
-
-		fmt.Fprintf(w, rowFormat, worktreeName, wt.Branch, status)
-	}
-
-	return nil
+	_, err := fmt.Fprintln(w, ui.RenderWorktreeTable(worktrees))
+	return err
 }
 
 func printJSON(w io.Writer, worktrees []git.Worktree) error {
