@@ -42,14 +42,16 @@ Arguments:
 
 		barePath := filepath.Join(absPath, ".bare")
 
-		ui.PrintStep(fmt.Sprintf("Cloning repository to %s", barePath))
-
 		var cloneErr error
 		if ghAvailable {
 			ui.PrintInfo("Using gh CLI for repository clone")
-			cloneErr = git.CloneRepoWithGH(repo, barePath)
+			cloneErr = ui.RunWithSpinner(fmt.Sprintf("Cloning %s...", repo), func() error {
+				return git.CloneRepoWithGH(repo, barePath)
+			})
 		} else {
-			cloneErr = git.CloneRepo(repo, barePath)
+			cloneErr = ui.RunWithSpinner(fmt.Sprintf("Cloning %s...", repo), func() error {
+				return git.CloneRepo(repo, barePath)
+			})
 		}
 		if cloneErr != nil {
 			return fmt.Errorf("cloning repository: %w", cloneErr)

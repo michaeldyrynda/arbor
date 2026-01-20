@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/charmbracelet/huh/spinner"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/log"
 )
@@ -53,4 +54,15 @@ func PrintErrorWithHint(msg, hint string) {
 		Foreground(ColorError)
 	fmt.Println(style.Render("✗ " + msg))
 	fmt.Println("  " + MutedStyle.Render(hint))
+}
+
+func RunWithSpinner(title string, action func() error) error {
+	var err error
+	spinner.New().
+		Title(title).
+		Action(func() {
+			err = action()
+		}).
+		Run()
+	return err
 }
