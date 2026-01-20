@@ -166,6 +166,44 @@ All phases 1-5 are complete. The project has:
 
 See `.ai/plans/arbor.md` for the detailed phase history and learnings.
 
+## Refactoring Work
+
+When working on the idiomatic refactor (`.ai/plans/idiomatic-refactor.md`):
+
+1. **Read the plan first** - Always read `.ai/plans/idiomatic-refactor.md` before starting any refactoring work
+2. **Work phase by phase** - Complete one phase before moving to the next
+3. **Document findings** - After completing each phase, update the "Findings" section with:
+   - Decisions made during implementation
+   - Challenges encountered and how they were resolved
+   - Code patterns established for consistency
+   - Notes relevant to subsequent phases
+4. **Mark tasks complete** - Change `- [ ]` to `- [x]` for each completed task
+5. **Run verification** - After each phase:
+   ```bash
+   go test ./... -v
+   go test ./... -race
+   golangci-lint run ./...
+   ```
+
+### Refactoring Principles
+
+- **Preserve behavior** - Refactoring should not change external behavior
+- **One concern at a time** - Don't mix refactoring with feature work
+- **Test before and after** - Ensure tests pass before starting, and still pass after
+- **Small commits** - Commit after each logical change for easy rollback
+- **Follow existing patterns** - When in doubt, match the style of surrounding code
+
+### Code Quality Standards
+
+When refactoring, enforce these standards:
+
+1. **No ignored errors** - Handle all errors explicitly, don't use `_, _ =`
+2. **No data races** - Use proper synchronization for concurrent access
+3. **Meaningful error messages** - Include context in error wrapping
+4. **Single source of truth** - No duplicated logic or constants
+5. **Dependency injection** - Prefer passing dependencies over global state
+6. **Testability** - Write code that can be unit tested
+
 ## Notes
 
 - The `scripts/` directory contains example scripts and is not part of the repository
