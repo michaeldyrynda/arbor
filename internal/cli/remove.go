@@ -69,7 +69,11 @@ Cleanup steps may include:
 		ui.PrintInfo(fmt.Sprintf("Removing %s at %s", targetWorktree.Branch, targetWorktree.Path))
 
 		deleteBranch := false
-		if !force && ui.ShouldPrompt(cmd, true) {
+		if !force {
+			if !ui.IsInteractive() {
+				return fmt.Errorf("worktree removal requires confirmation (use --force to skip)")
+			}
+
 			ui.PrintInfo("This will run cleanup steps.")
 			confirmed, err := ui.Confirm(fmt.Sprintf("Remove worktree '%s'?", targetWorktree.Branch))
 			if err != nil {
