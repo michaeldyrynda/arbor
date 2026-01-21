@@ -17,7 +17,8 @@ func NewLaravel() *Laravel {
 		basePreset: basePreset{
 			name: "laravel",
 			defaultSteps: []config.StepConfig{
-				{Name: "php.composer", Args: []string{"install"}},
+				{Name: "php.composer", Args: []string{"install"}, Condition: map[string]interface{}{"file_exists": "composer.lock"}},
+				{Name: "php.composer", Args: []string{"update"}, Condition: map[string]interface{}{"not": map[string]interface{}{"file_exists": "composer.lock"}}},
 				{Name: "file.copy", From: ".env.example", To: ".env", Priority: 5},
 				{Name: "database.create", Condition: map[string]interface{}{"env_file_contains": map[string]interface{}{"file": ".env", "key": "DB_CONNECTION"}}},
 				{Name: "node.npm", Args: []string{"ci"}, Condition: map[string]interface{}{"file_exists": "package-lock.json"}},

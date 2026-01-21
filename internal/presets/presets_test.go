@@ -61,29 +61,34 @@ func TestLaravelPreset_DefaultSteps(t *testing.T) {
 	preset := NewLaravel()
 	steps := preset.DefaultSteps()
 
-	assert.Len(t, steps, 9)
+	assert.Len(t, steps, 10)
 
 	assert.Equal(t, "php.composer", steps[0].Name)
 	assert.Equal(t, []string{"install"}, steps[0].Args)
+	assert.Equal(t, "composer.lock", steps[0].Condition["file_exists"])
 
-	assert.Equal(t, "file.copy", steps[1].Name)
-	assert.Equal(t, ".env.example", steps[1].From)
-	assert.Equal(t, ".env", steps[1].To)
+	assert.Equal(t, "php.composer", steps[1].Name)
+	assert.Equal(t, []string{"update"}, steps[1].Args)
+	assert.NotNil(t, steps[1].Condition["not"])
 
-	assert.Equal(t, "database.create", steps[2].Name)
+	assert.Equal(t, "file.copy", steps[2].Name)
+	assert.Equal(t, ".env.example", steps[2].From)
+	assert.Equal(t, ".env", steps[2].To)
 
-	assert.Equal(t, "node.npm", steps[3].Name)
-	assert.Equal(t, []string{"ci"}, steps[3].Args)
-	assert.NotNil(t, steps[3].Condition, "npm ci should have a condition")
-	assert.Equal(t, "package-lock.json", steps[3].Condition["file_exists"])
+	assert.Equal(t, "database.create", steps[3].Name)
 
-	assert.Equal(t, "php.laravel.artisan", steps[4].Name)
-	assert.Equal(t, []string{"key:generate", "--no-interaction"}, steps[4].Args)
+	assert.Equal(t, "node.npm", steps[4].Name)
+	assert.Equal(t, []string{"ci"}, steps[4].Args)
+	assert.NotNil(t, steps[4].Condition, "npm ci should have a condition")
+	assert.Equal(t, "package-lock.json", steps[4].Condition["file_exists"])
 
-	assert.Equal(t, "node.npm", steps[6].Name)
-	assert.Equal(t, []string{"run", "build"}, steps[6].Args)
-	assert.NotNil(t, steps[6].Condition, "npm run build should have a condition")
-	assert.Equal(t, "package-lock.json", steps[6].Condition["file_exists"])
+	assert.Equal(t, "php.laravel.artisan", steps[5].Name)
+	assert.Equal(t, []string{"key:generate", "--no-interaction"}, steps[5].Args)
+
+	assert.Equal(t, "node.npm", steps[7].Name)
+	assert.Equal(t, []string{"run", "build"}, steps[7].Args)
+	assert.NotNil(t, steps[7].Condition, "npm run build should have a condition")
+	assert.Equal(t, "package-lock.json", steps[7].Condition["file_exists"])
 }
 
 func TestLaravelPreset_CleanupSteps(t *testing.T) {
@@ -122,9 +127,15 @@ func TestPHPPreset_DefaultSteps(t *testing.T) {
 	preset := NewPHP()
 	steps := preset.DefaultSteps()
 
-	assert.Len(t, steps, 1)
+	assert.Len(t, steps, 2)
+
 	assert.Equal(t, "php.composer", steps[0].Name)
 	assert.Equal(t, []string{"install"}, steps[0].Args)
+	assert.Equal(t, "composer.lock", steps[0].Condition["file_exists"])
+
+	assert.Equal(t, "php.composer", steps[1].Name)
+	assert.Equal(t, []string{"update"}, steps[1].Args)
+	assert.NotNil(t, steps[1].Condition["not"])
 }
 
 func TestPHPPreset_CleanupSteps(t *testing.T) {
