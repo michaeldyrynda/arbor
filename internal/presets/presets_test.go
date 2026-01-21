@@ -10,29 +10,35 @@ import (
 )
 
 func TestLaravelPreset_Detect(t *testing.T) {
-	t.Run("detects by artisan file", func(t *testing.T) {
+	t.Run("detects with both composer.json and artisan", func(t *testing.T) {
 		tmpDir := t.TempDir()
-		err := os.WriteFile(filepath.Join(tmpDir, "artisan"), []byte("#!/usr/bin/env php"), 0644)
-		require.NoError(t, err)
+		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "composer.json"), []byte(`{"name": "test/app"}`), 0644))
+		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "artisan"), []byte("#!/usr/bin/env php"), 0644))
 
 		preset := NewLaravel()
 		assert.True(t, preset.Detect(tmpDir))
 	})
 
-	t.Run("detects by composer.json with laravel/framework", func(t *testing.T) {
+	t.Run("does not detect with only artisan", func(t *testing.T) {
 		tmpDir := t.TempDir()
-		composerJSON := `{"name": "test/app", "require": {"laravel/framework": "^10.0"}}`
-		err := os.WriteFile(filepath.Join(tmpDir, "composer.json"), []byte(composerJSON), 0644)
-		require.NoError(t, err)
+		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "artisan"), []byte("#!/usr/bin/env php"), 0644))
 
 		preset := NewLaravel()
-		assert.True(t, preset.Detect(tmpDir))
+		assert.False(t, preset.Detect(tmpDir))
 	})
 
-	t.Run("does not detect without laravel indicators", func(t *testing.T) {
+	t.Run("does not detect with only composer.json", func(t *testing.T) {
 		tmpDir := t.TempDir()
-		err := os.WriteFile(filepath.Join(tmpDir, "composer.json"), []byte(`{"name": "test/app"}`), 0644)
-		require.NoError(t, err)
+		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "composer.json"), []byte(`{"name": "test/app"}`), 0644))
+
+		preset := NewLaravel()
+		assert.False(t, preset.Detect(tmpDir))
+	})
+
+	t.Run("does not detect laravel package with framework dependency", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		composerJSON := `{"name": "vendor/laravel-package", "require": {"laravel/framework": "^10.0"}}`
+		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "composer.json"), []byte(composerJSON), 0644))
 
 		preset := NewLaravel()
 		assert.False(t, preset.Detect(tmpDir))
@@ -145,8 +151,8 @@ func TestManager_RegisterAndGet(t *testing.T) {
 
 func TestManager_Detect(t *testing.T) {
 	tmpDir := t.TempDir()
-	err := os.WriteFile(filepath.Join(tmpDir, "artisan"), []byte("#!/usr/bin/env php"), 0644)
-	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "composer.json"), []byte(`{"name": "test/app"}`), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "artisan"), []byte("#!/usr/bin/env php"), 0644))
 
 	m := NewManager()
 	detected := m.Detect(tmpDir)
@@ -156,8 +162,8 @@ func TestManager_Detect(t *testing.T) {
 func TestManager_Suggest(t *testing.T) {
 	t.Run("returns detected preset", func(t *testing.T) {
 		tmpDir := t.TempDir()
-		err := os.WriteFile(filepath.Join(tmpDir, "artisan"), []byte("#!/usr/bin/env php"), 0644)
-		require.NoError(t, err)
+		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "composer.json"), []byte(`{"name": "test/app"}`), 0644))
+		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "artisan"), []byte("#!/usr/bin/env php"), 0644))
 
 		m := NewManager()
 		suggested := m.Suggest(tmpDir)

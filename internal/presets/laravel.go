@@ -3,7 +3,6 @@ package presets
 import (
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/michaeldyrynda/arbor/internal/config"
 	"github.com/michaeldyrynda/arbor/internal/utils"
@@ -40,18 +39,17 @@ func NewLaravel() *Laravel {
 }
 
 func (p *Laravel) Detect(path string) bool {
-	artisanPath := filepath.Join(path, "artisan")
-	if _, err := os.Stat(artisanPath); err == nil {
-		return true
-	}
-
 	composerPath := filepath.Join(path, "composer.json")
-	data, err := os.ReadFile(composerPath)
-	if err != nil {
+	if _, err := os.Stat(composerPath); err != nil {
 		return false
 	}
 
-	return strings.Contains(string(data), "laravel/framework")
+	artisanPath := filepath.Join(path, "artisan")
+	if _, err := os.Stat(artisanPath); err != nil {
+		return false
+	}
+
+	return true
 }
 
 func (p *Laravel) Suggest(path string) string {
