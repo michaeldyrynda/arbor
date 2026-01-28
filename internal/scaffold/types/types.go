@@ -13,18 +13,20 @@ import (
 )
 
 type ScaffoldContext struct {
-	WorktreePath string
-	Branch       string
-	RepoName     string
-	SiteName     string
-	Preset       string
-	Env          map[string]string
+	WorktreePath  string
+	Branch        string
+	RepoName      string
+	SiteName      string
+	Preset        string
+	Env           map[string]string
+	EnvSourcePath string
 }
 
 type StepOptions struct {
-	Args    []string
-	DryRun  bool
-	Verbose bool
+	Args           []string
+	DryRun         bool
+	Verbose        bool
+	MigrateCommand string // "none", "migrate", or "migrate:fresh"
 }
 
 type ScaffoldStep interface {

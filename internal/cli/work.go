@@ -33,6 +33,8 @@ available branches or entering a new branch name.`,
 		baseBranch := mustGetString(cmd, "base")
 		dryRun := mustGetBool(cmd, "dry-run")
 		verbose := mustGetBool(cmd, "verbose")
+		migrateCmd := mustGetString(cmd, "migrate")
+		copyEnv := mustGetBool(cmd, "copy-env")
 
 		var branch string
 		if len(args) > 0 {
@@ -109,7 +111,14 @@ available branches or entering a new branch name.`,
 
 			repoName := filepath.Base(filepath.Dir(absWorktreePath))
 			folderName := filepath.Base(absWorktreePath)
-			if err := pc.ScaffoldManager().RunScaffold(absWorktreePath, branch, repoName, folderName, preset, pc.Config, false, verbose); err != nil {
+
+			envSourcePath := ""
+			if copyEnv {
+				mainWorktreePath := filepath.Join(pc.ProjectPath, pc.DefaultBranch)
+				envSourcePath = filepath.Join(mainWorktreePath, ".env")
+			}
+
+			if err := pc.ScaffoldManager().RunScaffold(absWorktreePath, branch, repoName, folderName, preset, pc.Config, false, verbose, migrateCmd, envSourcePath); err != nil {
 				ui.PrintErrorWithHint("Scaffold steps failed", err.Error())
 			}
 		} else {
@@ -130,4 +139,6 @@ func init() {
 	rootCmd.AddCommand(workCmd)
 
 	workCmd.Flags().StringP("base", "b", "", "Base branch for new worktree")
+	workCmd.Flags().String("migrate", "none", "Database migration strategy (none, migrate, migrate:fresh)")
+	workCmd.Flags().Bool("copy-env", false, "Copy .env from main branch instead of .env.example")
 }

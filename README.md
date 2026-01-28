@@ -38,11 +38,17 @@ brew install arbor
 # Initialise a new Laravel project
 arbor init git@github.com:user/my-laravel-app.git
 
+# Initialise with database migrations
+arbor init git@github.com:user/my-laravel-app.git --migrate=migrate:fresh
+
 # Create a feature worktree
 arbor work feature/user-auth
 
 # Create a worktree from a specific base branch
 arbor work feature/user-auth -b develop
+
+# Create a worktree with migrations and copy .env from main branch
+arbor work feature/user-auth --migrate=migrate --copy-env
 
 # List all worktrees with their status
 arbor list
@@ -56,6 +62,50 @@ arbor prune
 # Destroy the entire project (removes worktrees and bare repo)
 arbor destroy
 ```
+
+## Command Options
+
+### Migration Control
+
+Both `arbor init` and `arbor work` support database migration control via the `--migrate` flag:
+
+```bash
+# Skip migrations (default)
+arbor init git@github.com:user/repo.git
+arbor work feature/new-feature
+
+# Run standard migrations with seeding
+arbor init git@github.com:user/repo.git --migrate=migrate
+arbor work feature/new-feature --migrate=migrate
+
+# Run fresh migrations (drops all tables first)
+arbor init git@github.com:user/repo.git --migrate=migrate:fresh
+arbor work feature/new-feature --migrate=migrate:fresh
+```
+
+**Options:**
+- `none` (default) - Skip database migrations entirely
+- `migrate` - Run `php artisan migrate --seed --no-interaction`
+- `migrate:fresh` - Run `php artisan migrate:fresh --seed --no-interaction`
+
+### Environment Configuration
+
+When creating a new worktree with `arbor work`, you can copy the `.env` file from your main branch instead of using `.env.example`:
+
+```bash
+# Copy .env from main branch
+arbor work feature/new-feature --copy-env
+
+# Combine with migrations
+arbor work feature/new-feature --migrate=migrate --copy-env
+```
+
+**Use cases:**
+- Maintain consistent database credentials across worktrees
+- Preserve API keys and third-party service configurations
+- Quickly spin up worktrees with production-like settings
+
+**Note:** By default (without `--copy-env`), worktrees use `.env.example` as the source.
 
 ## Documentation
 

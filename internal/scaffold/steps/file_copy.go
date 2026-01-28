@@ -30,8 +30,22 @@ func (s *FileCopyStep) Run(ctx types.ScaffoldContext, opts types.StepOptions) er
 	fromPath := filepath.Join(ctx.WorktreePath, s.from)
 	toPath := filepath.Join(ctx.WorktreePath, s.to)
 
-	if opts.Verbose {
-		fmt.Printf("  Copying %s to %s\n", s.from, s.to)
+	if s.to == ".env" && ctx.EnvSourcePath != "" {
+		_, err := os.Stat(ctx.EnvSourcePath)
+		if err == nil {
+			fromPath = ctx.EnvSourcePath
+			if opts.Verbose {
+				fmt.Printf("  Copying .env from main branch: %s to %s\n", fromPath, s.to)
+			}
+		} else {
+			if opts.Verbose {
+				fmt.Printf("  Main branch .env not found at %s, falling back to %s\n", ctx.EnvSourcePath, s.from)
+			}
+		}
+	} else {
+		if opts.Verbose {
+			fmt.Printf("  Copying %s to %s\n", s.from, s.to)
+		}
 	}
 
 	data, err := os.ReadFile(fromPath)
@@ -52,6 +66,14 @@ func (s *FileCopyStep) Priority() int {
 
 func (s *FileCopyStep) Condition(ctx types.ScaffoldContext) bool {
 	fromPath := filepath.Join(ctx.WorktreePath, s.from)
+
+	if s.to == ".env" && ctx.EnvSourcePath != "" {
+		_, err := os.Stat(ctx.EnvSourcePath)
+		if err == nil {
+			fromPath = ctx.EnvSourcePath
+		}
+	}
+
 	_, err := os.Stat(fromPath)
 	return err == nil
 }
