@@ -119,12 +119,13 @@ Arguments:
 		}
 
 		verbose := mustGetBool(cmd, "verbose")
+		migrateCmd := mustGetString(cmd, "migrate")
 
 		if cfg.Preset != "" && verbose {
 			ui.PrintInfo(fmt.Sprintf("Running scaffold for preset: %s", cfg.Preset))
 		}
 
-		if err := scaffoldManager.RunScaffold(mainPath, defaultBranch, repoName, cfg.SiteName, cfg.Preset, cfg, false, verbose); err != nil {
+		if err := scaffoldManager.RunScaffold(mainPath, defaultBranch, repoName, cfg.SiteName, cfg.Preset, cfg, false, verbose, migrateCmd, ""); err != nil {
 			ui.PrintErrorWithHint("Scaffold steps failed", err.Error())
 		}
 
@@ -140,4 +141,5 @@ func init() {
 	rootCmd.AddCommand(initCmd)
 
 	initCmd.Flags().String("preset", "", "Project preset (laravel, php)")
+	initCmd.Flags().String("migrate", "none", "Database migration strategy (none, migrate, migrate:fresh)")
 }

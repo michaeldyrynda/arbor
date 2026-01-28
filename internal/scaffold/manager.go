@@ -43,7 +43,7 @@ func (m *ScaffoldManager) DetectPreset(path string) string {
 	return ""
 }
 
-func (m *ScaffoldManager) GetStepsForWorktree(cfg *config.Config, worktreePath, branch string) ([]types.ScaffoldStep, error) {
+func (m *ScaffoldManager) GetStepsForWorktree(cfg *config.Config, worktreePath, branch string, migrateCmd string) ([]types.ScaffoldStep, error) {
 	var stepsList []types.ScaffoldStep
 
 	presetName := cfg.Preset
@@ -53,9 +53,12 @@ func (m *ScaffoldManager) GetStepsForWorktree(cfg *config.Config, worktreePath, 
 
 	if preset, ok := m.GetPreset(presetName); ok {
 		for _, stepConfig := range preset.DefaultSteps() {
-			step := steps.Create(stepConfig.Name, stepConfig)
-			if step != nil {
-				stepsList = append(stepsList, step)
+			stepConfig = m.adjustMigrationStepConfig(stepConfig, migrateCmd)
+			if stepConfig.Name != "" {
+				step := steps.Create(stepConfig.Name, stepConfig)
+				if step != nil {
+					stepsList = append(stepsList, step)
+				}
 			}
 		}
 	}
@@ -138,24 +141,26 @@ func (m *ScaffoldManager) stepsFromConfig(stepConfigs []config.StepConfig) []typ
 	return stepsList
 }
 
-func (m *ScaffoldManager) RunScaffold(worktreePath, branch, repoName, siteName, preset string, cfg *config.Config, dryRun, verbose bool) error {
+func (m *ScaffoldManager) RunScaffold(worktreePath, branch, repoName, siteName, preset string, cfg *config.Config, dryRun, verbose bool, migrateCmd string, envSourcePath string) error {
 	ctx := types.ScaffoldContext{
-		WorktreePath: worktreePath,
-		Branch:       branch,
-		RepoName:     repoName,
-		SiteName:     siteName,
-		Preset:       preset,
-		Env:          make(map[string]string),
+		WorktreePath:  worktreePath,
+		Branch:        branch,
+		RepoName:      repoName,
+		SiteName:      siteName,
+		Preset:        preset,
+		Env:           make(map[string]string),
+		EnvSourcePath: envSourcePath,
 	}
 
-	stepsList, err := m.GetStepsForWorktree(cfg, worktreePath, branch)
+	stepsList, err := m.GetStepsForWorktree(cfg, worktreePath, branch, migrateCmd)
 	if err != nil {
 		return fmt.Errorf("getting scaffold steps: %w", err)
 	}
 
 	opts := types.StepOptions{
-		DryRun:  dryRun,
-		Verbose: verbose,
+		DryRun:         dryRun,
+		Verbose:        verbose,
+		MigrateCommand: migrateCmd,
 	}
 
 	executor := NewStepExecutor(stepsList, ctx, opts)
@@ -164,6 +169,47 @@ func (m *ScaffoldManager) RunScaffold(worktreePath, branch, repoName, siteName, 
 	}
 
 	return nil
+}
+
+func (m *ScaffoldManager) adjustMigrationStepConfig(stepConfig config.StepConfig, migrateCmd string) config.StepConfig {
+	if stepConfig.Name != "php.laravel.artisan" {
+		return stepConfig
+	}
+
+	if len(stepConfig.Args) == 0 {
+		return stepConfig
+	}
+
+	isMigrationStep := false
+	for _, arg := range stepConfig.Args {
+		if arg == "migrate:fresh" || arg == "migrate" {
+			isMigrationStep = true
+			break
+		}
+	}
+
+	if !isMigrationStep {
+		return stepConfig
+	}
+
+	if migrateCmd == "none" {
+		stepConfig.Name = ""
+		return stepConfig
+	}
+
+	if migrateCmd == "migrate" {
+		newArgs := make([]string, 0, len(stepConfig.Args))
+		for _, arg := range stepConfig.Args {
+			if arg == "migrate:fresh" {
+				newArgs = append(newArgs, "migrate")
+			} else {
+				newArgs = append(newArgs, arg)
+			}
+		}
+		stepConfig.Args = newArgs
+	}
+
+	return stepConfig
 }
 
 func (m *ScaffoldManager) RunCleanup(worktreePath, branch, repoName, siteName, preset string, cfg *config.Config, dryRun, verbose bool) error {
