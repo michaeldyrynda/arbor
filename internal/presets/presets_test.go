@@ -75,7 +75,7 @@ func TestLaravelPreset_DefaultSteps(t *testing.T) {
 	assert.Equal(t, ".env.example", steps[2].From)
 	assert.Equal(t, ".env", steps[2].To)
 
-	assert.Equal(t, "database.create", steps[3].Name)
+	assert.Equal(t, "db.create", steps[3].Name)
 
 	assert.Equal(t, "node.npm", steps[4].Name)
 	assert.Equal(t, []string{"ci"}, steps[4].Args)
@@ -97,7 +97,7 @@ func TestLaravelPreset_CleanupSteps(t *testing.T) {
 
 	assert.Len(t, steps, 2)
 	assert.Equal(t, "herd", steps[0].Name)
-	assert.Equal(t, "bash.run", steps[1].Name)
+	assert.Equal(t, "db.destroy", steps[1].Name)
 }
 
 func TestPHPPreset_Detect(t *testing.T) {

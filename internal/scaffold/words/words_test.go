@@ -302,7 +302,7 @@ func isAdjective(word string) bool {
 
 func isNoun(word string) bool {
 	for _, noun := range Nouns {
-		if noun == noun {
+		if noun == word {
 			return true
 		}
 	}

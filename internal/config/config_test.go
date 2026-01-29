@@ -100,6 +100,98 @@ func TestGetGlobalConfigDir_XDGNotSet(t *testing.T) {
 	assert.Equal(t, filepath.Join(home, ".config", "arbor"), dir)
 }
 
+func TestStepConfig_Unmarshal_NewFields(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	configContent := `preset: php
+scaffold:
+  steps:
+    - name: test.step
+      key: DB_DATABASE
+      value: "{{ .SiteName }}_{{ .DbSuffix }}"
+      store_as: DatabaseName
+      file: .env
+      type: mysql
+      priority: 10
+      args: ["--force"]
+      enabled: true
+      condition:
+        env_file_contains:
+          file: .env
+          key: DB_CONNECTION
+`
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "arbor.yaml"), []byte(configContent), 0644))
+
+	cfg, err := LoadProject(tmpDir)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, cfg)
+	assert.Len(t, cfg.Scaffold.Steps, 1)
+
+	step := cfg.Scaffold.Steps[0]
+	assert.Equal(t, "test.step", step.Name)
+	assert.Equal(t, "DB_DATABASE", step.Key)
+	assert.Equal(t, "{{ .SiteName }}_{{ .DbSuffix }}", step.Value)
+	assert.Equal(t, "DatabaseName", step.StoreAs)
+	assert.Equal(t, ".env", step.File)
+	assert.Equal(t, "mysql", step.Type)
+	assert.Equal(t, 10, step.Priority)
+	assert.Equal(t, []string{"--force"}, step.Args)
+	assert.NotNil(t, step.Enabled)
+	assert.True(t, *step.Enabled)
+	assert.Contains(t, step.Condition, "env_file_contains")
+}
+
+func TestStepConfig_Unmarshal_OptionalFields(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	configContent := `preset: php
+scaffold:
+  steps:
+    - name: test.step
+`
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "arbor.yaml"), []byte(configContent), 0644))
+
+	cfg, err := LoadProject(tmpDir)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, cfg)
+	assert.Len(t, cfg.Scaffold.Steps, 1)
+
+	step := cfg.Scaffold.Steps[0]
+	assert.Equal(t, "test.step", step.Name)
+	assert.Empty(t, step.Key)
+	assert.Empty(t, step.Value)
+	assert.Empty(t, step.StoreAs)
+	assert.Empty(t, step.File)
+	assert.Empty(t, step.Type)
+	assert.Equal(t, 0, step.Priority)
+	assert.Nil(t, step.Args)
+	assert.Nil(t, step.Enabled)
+}
+
+func TestStepConfig_Unmarshal_EnabledFalse(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	configContent := `preset: php
+scaffold:
+  steps:
+    - name: test.step
+      enabled: false
+`
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "arbor.yaml"), []byte(configContent), 0644))
+
+	cfg, err := LoadProject(tmpDir)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, cfg)
+	assert.Len(t, cfg.Scaffold.Steps, 1)
+
+	step := cfg.Scaffold.Steps[0]
+	assert.NotNil(t, step.Enabled)
+	assert.False(t, *step.Enabled)
+}
+
 func loadGlobalFromTestDir(testDir string) (*GlobalConfig, error) {
 	v := viper.New()
 

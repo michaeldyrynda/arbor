@@ -63,7 +63,14 @@ func init() {
 	Register("command.run", func(cfg config.StepConfig) types.ScaffoldStep {
 		return NewCommandRunStep(cfg.Command)
 	})
-	Register("database.create", func(cfg config.StepConfig) types.ScaffoldStep {
-		return NewDatabaseStep(cfg, 8)
+	Register("db.create", func(cfg config.StepConfig) types.ScaffoldStep {
+		priority := 8
+		if cfg.Priority != 0 {
+			priority = cfg.Priority
+		}
+		return NewDbCreateStep(cfg, priority)
+	})
+	Register("db.destroy", func(cfg config.StepConfig) types.ScaffoldStep {
+		return NewDbDestroyStep(cfg)
 	})
 }

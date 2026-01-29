@@ -49,6 +49,11 @@ type StepConfig struct {
 	Priority  int                    `mapstructure:"priority"`
 	From      string                 `mapstructure:"from"`
 	To        string                 `mapstructure:"to"`
+	Key       string                 `mapstructure:"key"`
+	Value     string                 `mapstructure:"value"`
+	StoreAs   string                 `mapstructure:"store_as"`
+	File      string                 `mapstructure:"file"`
+	Type      string                 `mapstructure:"type"`
 }
 
 // CleanupStep represents a cleanup step configuration
@@ -198,6 +203,61 @@ func CreateGlobalConfig(config *GlobalConfig) error {
 	configPath := filepath.Join(configDir, "arbor.yaml")
 	if err := v.WriteConfigAs(configPath); err != nil {
 		return fmt.Errorf("writing config: %w", err)
+	}
+
+	return nil
+}
+
+// WorktreeConfig represents worktree-local configuration
+type WorktreeConfig struct {
+	DbSuffix string `mapstructure:"db_suffix"`
+}
+
+// ReadWorktreeConfig reads worktree-local configuration from arbor.yaml
+func ReadWorktreeConfig(worktreePath string) (*WorktreeConfig, error) {
+	configPath := filepath.Join(worktreePath, "arbor.yaml")
+
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		return &WorktreeConfig{}, nil
+	}
+
+	v := viper.New()
+	v.SetConfigName("arbor")
+	v.SetConfigType("yaml")
+	v.AddConfigPath(worktreePath)
+
+	if err := v.ReadInConfig(); err != nil {
+		return nil, fmt.Errorf("reading worktree config: %w", err)
+	}
+
+	var config WorktreeConfig
+	if err := v.Unmarshal(&config); err != nil {
+		return nil, fmt.Errorf("parsing worktree config: %w", err)
+	}
+
+	return &config, nil
+}
+
+// WriteWorktreeConfig writes worktree-local configuration to arbor.yaml
+func WriteWorktreeConfig(worktreePath string, data map[string]string) error {
+	v := viper.New()
+	v.SetConfigName("arbor")
+	v.SetConfigType("yaml")
+	v.AddConfigPath(worktreePath)
+
+	dataMap := make(map[string]interface{})
+	for k, v := range data {
+		dataMap[k] = v
+	}
+
+	if err := v.MergeConfigMap(dataMap); err != nil {
+		return fmt.Errorf("merging worktree config: %w", err)
+	}
+
+	configPath := filepath.Join(worktreePath, "arbor.yaml")
+
+	if err := v.WriteConfigAs(configPath); err != nil {
+		return fmt.Errorf("writing worktree config: %w", err)
 	}
 
 	return nil
