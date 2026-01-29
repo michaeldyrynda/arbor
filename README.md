@@ -66,6 +66,293 @@ See [AGENTS.md](./AGENTS.md) for development guide.
 - Scaffold presets
 - Testing strategy
 
+## Configuration
+
+Arbor uses a configuration file to define scaffold steps for `init` and `work` commands. Configuration is read from `arbor.yaml` in your project root.
+
+### Scaffold Steps
+
+Scaffold steps define actions to run when creating a new worktree. Each step can:
+
+- Run commands (bash, binary, composer, npm, etc.)
+- Manage databases (create/destroy)
+- Read/write environment variables
+- Copy files
+- Execute Laravel Artisan commands
+
+### Configuration Structure
+
+```yaml
+scaffold:
+  steps:
+    - name: step.name
+      enabled: true
+      priority: 10
+      args: ["--option"]
+      condition:
+        env_file_contains:
+          file: .env
+          key: DB_CONNECTION
+
+cleanup:
+  steps:
+    - name: cleanup.step
+```
+
+### Template Variables
+
+All steps support template variables that are replaced at runtime:
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `{{ .Path }}` | Worktree directory name | `feature-auth` |
+| `{{ .RepoPath }}` | Project directory name | `myapp` |
+| `{{ .RepoName }}` | Repository name | `myapp` |
+| `{{ .SiteName }}` | Site/project name | `myapp` |
+| `{{ .Branch }}` | Git branch name | `feature-auth` |
+| `{{ .DbSuffix }}` | Database suffix (from db.create) | `swift_runner` |
+| `{{ .VarName }}` | Custom variable from env.read | Custom values |
+
+### Built-in Steps
+
+#### Database Steps
+
+**`db.create`** - Create a database with unique name
+
+```yaml
+- name: db.create
+  type: mysql  # or pgsql, auto-detected from DB_CONNECTION if omitted
+```
+
+- Generates unique name: `{site_name}_{adjective}_{noun}`
+- Auto-detects engine from `DB_CONNECTION` in `.env`
+- Retries up to 5 times on collision
+- Persists suffix to worktree-local `arbor.yaml` for cleanup
+
+**`db.destroy`** - Clean up databases matching suffix pattern
+
+```yaml
+- name: db.destroy
+  type: mysql  # matches db.create type
+```
+
+- Drops all databases matching the suffix pattern
+- Runs automatically during `arbor remove`
+
+#### Environment Steps
+
+**`env.read`** - Read from `.env` and store as variable
+
+```yaml
+- name: env.read
+  key: DB_HOST
+  store_as: DbHost  # optional, defaults to key name
+  file: .env        # optional, defaults to .env
+```
+
+- Stores value as `{{ .DbHost }}` for later steps
+- Fails if key not found
+
+**`env.write`** - Write to `.env` file
+
+```yaml
+- name: env.write
+  key: DB_DATABASE
+  value: "{{ .SiteName }}_{{ .DbSuffix }}"
+  file: .env  # optional, defaults to .env
+```
+
+- Creates `.env` if missing
+- Replaces existing values in-place
+- Preserves comments, blank lines, and ordering
+- Supports template variables
+
+#### Node.js Steps
+
+**`node.npm`** - npm package manager
+
+```yaml
+- name: node.npm
+  args: ["install"]
+  priority: 10
+```
+
+**`node.yarn`** - Yarn package manager
+
+```yaml
+- name: node.yarn
+  args: ["install"]
+  priority: 10
+```
+
+**`node.pnpm`** - pnpm package manager
+
+```yaml
+- name: node.pnpm
+  args: ["install"]
+  priority: 10
+```
+
+**`node.bun`** - Bun package manager
+
+```yaml
+- name: node.bun
+  args: ["install"]
+  priority: 10
+```
+
+#### PHP Steps
+
+**`php.composer`** - Composer dependency manager
+
+```yaml
+- name: php.composer
+  args: ["install"]
+  priority: 10
+```
+
+**`php.laravel.artisan`** - Laravel Artisan commands
+
+```yaml
+- name: php.laravel.artisan
+  args: ["migrate:fresh", "--no-interaction"]
+  priority: 20
+```
+
+**`herd.link`** - Laravel Herd link
+
+```yaml
+- name: herd.link
+```
+
+#### Utility Steps
+
+**`bash.run`** - Run bash commands
+
+```yaml
+- name: bash.run
+  command: echo "Setting up {{ .Path }}"
+```
+
+**`file.copy`** - Copy files with template replacement
+
+```yaml
+- name: file.copy
+  from: .env.example
+  to: .env
+```
+
+**`command.run`** - Run any command
+
+```yaml
+- name: command.run
+  command: npm
+  args: ["run", "build"]
+```
+
+### Step Options
+
+All steps support these configuration options:
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `enabled` | boolean | Enable/disable step (default: true) |
+| `priority` | integer | Execution order (lower runs first, default: 0) |
+| `condition` | object | Conditional execution rules |
+
+### Conditions
+
+Steps can be conditionally executed based on environment:
+
+```yaml
+condition:
+  env_file_contains:
+    file: .env
+    key: DB_CONNECTION
+```
+
+### Example Configuration
+
+Complete example for a Laravel project:
+
+```yaml
+scaffold:
+  steps:
+    # Create database if DB_CONNECTION is set
+    - name: db.create
+      priority: 5
+      condition:
+        env_file_contains:
+          file: .env
+          key: DB_CONNECTION
+
+    # Write database name to .env
+    - name: env.write
+      priority: 6
+      key: DB_DATABASE
+      value: "{{ .SiteName }}_{{ .DbSuffix }}"
+
+    # Install dependencies
+    - name: php.composer
+      priority: 10
+      args: ["install"]
+
+    - name: node.npm
+      priority: 11
+      args: ["install"]
+
+    # Run migrations
+    - name: php.laravel.artisan
+      priority: 20
+      args: ["migrate:fresh", "--no-interaction"]
+
+    # Set domain based on worktree path
+    - name: env.write
+      priority: 21
+      key: APP_DOMAIN
+      value: "app.{{ .Path }}.test"
+
+    # Generate application key
+    - name: php.laravel.artisan
+      priority: 22
+      args: ["key:generate"]
+
+cleanup:
+  steps:
+    # Clean up databases
+    - name: db.destroy
+```
+
+### What We Handle For You
+
+**Database Naming**
+- Automatically generates unique, readable database names
+- Format: `{site_name}_{adjective}_{noun}` (e.g., `myapp_swift_runner`)
+- Handles collisions with automatic retries
+- Enforces PostgreSQL/MySQL length limits
+
+**Database Cleanup**
+- Automatically drops databases when worktree is removed
+- Uses pattern matching to find all databases with same suffix
+- Integrates with `arbor remove` command
+
+**Template Variables**
+- All template syntax uses Go's `text/template`
+- Handles whitespace variations: `{{ .Path }}`, `{{ .Path }}`, `{{  .Path  }}`
+- Fails fast on unknown variables with clear error messages
+- Supports dynamic variables from previous steps
+
+**File Operations**
+- Atomic writes for environment files
+- Preserves file permissions
+- Maintains existing formatting (comments, blank lines, ordering)
+- Creates directories as needed
+
+**Error Handling**
+- Graceful degradation where appropriate
+- Clear error messages for configuration issues
+- Non-fatal warnings for optional operations
+
 ## License
 
 MIT
