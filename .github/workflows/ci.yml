@@ -75,8 +75,8 @@ jobs:
       - name: Debug PostgreSQL connection
         run: |
           echo "Testing PostgreSQL connection..."
-          PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -c "SELECT 1 AS test"
-          PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -c "\l"
+          psql -h 127.0.0.1 -U postgres -c "SELECT 1 AS test"
+          psql -h 127.0.0.1 -U postgres -c "\l"
 
       - name: Run tests
         run: go test ./... -v -race -cover 2>&1 | tee test-output.log || true
