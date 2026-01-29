@@ -268,3 +268,117 @@ APP_NAME=myapp
 		assert.NotEmpty(t, destroyedSuffix, "DbSuffix should still be set after destroy")
 	})
 }
+
+func TestIntegration_RunScaffoldSuffixLoading(t *testing.T) {
+	t.Run("RunScaffold loads existing suffix from worktree config", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		envContent := `DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_USERNAME=root
+DB_PASSWORD=root
+APP_NAME=myapp
+`
+		envFile := filepath.Join(tmpDir, ".env")
+		require.NoError(t, os.WriteFile(envFile, []byte(envContent), 0644))
+
+		existingSuffix := "existing_suffix"
+		err := config.WriteWorktreeConfig(tmpDir, map[string]string{"db_suffix": existingSuffix})
+		require.NoError(t, err)
+
+		cfg := &config.Config{Preset: ""}
+		manager := NewScaffoldManager()
+
+		err = manager.RunScaffold(tmpDir, "test", "myrepo", "myapp", "", cfg, false, false)
+		require.NoError(t, err)
+
+		cfgAfter, err := config.ReadWorktreeConfig(tmpDir)
+		require.NoError(t, err)
+		assert.Equal(t, existingSuffix, cfgAfter.DbSuffix, "RunScaffold should preserve existing suffix from worktree config")
+	})
+
+	t.Run("RunScaffold generates new suffix when none exists", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		envContent := `DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_USERNAME=root
+DB_PASSWORD=root
+APP_NAME=myapp
+`
+		envFile := filepath.Join(tmpDir, ".env")
+		require.NoError(t, os.WriteFile(envFile, []byte(envContent), 0644))
+
+		cfg := &config.Config{Preset: ""}
+		manager := NewScaffoldManager()
+
+		err := manager.RunScaffold(tmpDir, "test", "myrepo", "myapp", "", cfg, false, false)
+		require.NoError(t, err)
+
+		cfgAfter, err := config.ReadWorktreeConfig(tmpDir)
+		require.NoError(t, err)
+		assert.NotEmpty(t, cfgAfter.DbSuffix, "RunScaffold should generate new suffix when none exists in worktree config")
+
+		parts := strings.Split(cfgAfter.DbSuffix, "_")
+		assert.Len(t, parts, 2, "Suffix should be in format {adjective}_{noun}")
+	})
+}
+
+func TestIntegration_MultipleDatabasesSharedSuffix(t *testing.T) {
+	t.Run("multiple db.create steps share same suffix", func(t *testing.T) {
+		if _, err := exec.LookPath("mysql"); err != nil {
+			t.Skip("mysql client not found")
+		}
+
+		tmpDir := t.TempDir()
+
+		envContent := `DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_USERNAME=root
+DB_PASSWORD=root
+APP_NAME=myapp
+`
+		envFile := filepath.Join(tmpDir, ".env")
+		require.NoError(t, os.WriteFile(envFile, []byte(envContent), 0644))
+
+		ctx := &types.ScaffoldContext{
+			WorktreePath: tmpDir,
+			SiteName:     "myapp",
+			Branch:       "test",
+			Path:         "feature-test",
+			Env:          make(map[string]string),
+			Vars:         make(map[string]string),
+		}
+
+		appStep := steps.Create("db.create", config.StepConfig{Args: []string{"--prefix", "app"}, Priority: 8})
+		require.NotNil(t, appStep)
+		err := appStep.Run(ctx, types.StepOptions{Verbose: false})
+		require.NoError(t, err)
+
+		firstSuffix := ctx.GetDbSuffix()
+		assert.NotEmpty(t, firstSuffix, "First db.create should set suffix")
+
+		quotesStep := steps.Create("db.create", config.StepConfig{Args: []string{"--prefix", "quotes"}, Priority: 8})
+		require.NotNil(t, quotesStep)
+		err = quotesStep.Run(ctx, types.StepOptions{Verbose: false})
+		require.NoError(t, err)
+
+		secondSuffix := ctx.GetDbSuffix()
+		assert.NotEmpty(t, secondSuffix, "Second db.create should set suffix")
+
+		knowledgeStep := steps.Create("db.create", config.StepConfig{Args: []string{"--prefix", "knowledge"}, Priority: 8})
+		require.NotNil(t, knowledgeStep)
+		err = knowledgeStep.Run(ctx, types.StepOptions{Verbose: false})
+		require.NoError(t, err)
+
+		thirdSuffix := ctx.GetDbSuffix()
+		assert.NotEmpty(t, thirdSuffix, "Third db.create should set suffix")
+
+		assert.Equal(t, firstSuffix, secondSuffix, "All three databases should use the same suffix")
+		assert.Equal(t, secondSuffix, thirdSuffix, "All three databases should use the same suffix")
+
+		cfg, err := config.ReadWorktreeConfig(tmpDir)
+		require.NoError(t, err)
+		assert.Equal(t, firstSuffix, cfg.DbSuffix, "Suffix should be persisted to worktree config")
+	})
+}

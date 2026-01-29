@@ -284,6 +284,115 @@ func TestDbCreateStep(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotEmpty(t, ctx.GetDbSuffix())
 	})
+
+	t.Run("creates database with custom prefix via --prefix arg", func(t *testing.T) {
+		if _, err := exec.LookPath("mysql"); err != nil {
+			t.Skip("mysql client not found")
+		}
+
+		tmpDir := t.TempDir()
+
+		envFile := filepath.Join(tmpDir, ".env")
+		if err := os.WriteFile(envFile, []byte("DB_CONNECTION=mysql\nDB_HOST=127.0.0.1\nDB_USERNAME=root\nDB_PASSWORD=root\n"), 0644); err != nil {
+			t.Fatalf("writing env file: %v", err)
+		}
+
+		step := NewDbCreateStep(config.StepConfig{
+			Args: []string{"--prefix", "mycustom"},
+		}, 8)
+		ctx := &types.ScaffoldContext{
+			WorktreePath: tmpDir,
+			SiteName:     "testapp",
+		}
+
+		err := step.Run(ctx, types.StepOptions{Verbose: false})
+		assert.NoError(t, err)
+
+		suffix := ctx.GetDbSuffix()
+		assert.NotEmpty(t, suffix, "DbSuffix should be set")
+
+		cfg, err := config.ReadWorktreeConfig(tmpDir)
+		require.NoError(t, err)
+		assert.Equal(t, suffix, cfg.DbSuffix, "Suffix should be persisted to worktree config")
+	})
+
+	t.Run("creates database without prefix uses siteName", func(t *testing.T) {
+		if _, err := exec.LookPath("mysql"); err != nil {
+			t.Skip("mysql client not found")
+		}
+
+		tmpDir := t.TempDir()
+
+		envFile := filepath.Join(tmpDir, ".env")
+		if err := os.WriteFile(envFile, []byte("DB_CONNECTION=mysql\nDB_HOST=127.0.0.1\nDB_USERNAME=root\nDB_PASSWORD=root\n"), 0644); err != nil {
+			t.Fatalf("writing env file: %v", err)
+		}
+
+		step := NewDbCreateStep(config.StepConfig{}, 8)
+		ctx := &types.ScaffoldContext{
+			WorktreePath: tmpDir,
+			SiteName:     "myapp",
+		}
+
+		err := step.Run(ctx, types.StepOptions{Verbose: false})
+		assert.NoError(t, err)
+		assert.NotEmpty(t, ctx.GetDbSuffix())
+	})
+
+	t.Run("db.create uses existing suffix from context", func(t *testing.T) {
+		if _, err := exec.LookPath("mysql"); err != nil {
+			t.Skip("mysql client not found")
+		}
+
+		tmpDir := t.TempDir()
+
+		envFile := filepath.Join(tmpDir, ".env")
+		if err := os.WriteFile(envFile, []byte("DB_CONNECTION=mysql\nDB_HOST=127.0.0.1\nDB_USERNAME=root\nDB_PASSWORD=root\n"), 0644); err != nil {
+			t.Fatalf("writing env file: %v", err)
+		}
+
+		step := NewDbCreateStep(config.StepConfig{}, 8)
+		ctx := &types.ScaffoldContext{
+			WorktreePath: tmpDir,
+			SiteName:     "testapp",
+		}
+		ctx.SetDbSuffix("preexisting_suffix")
+
+		err := step.Run(ctx, types.StepOptions{Verbose: false})
+		assert.NoError(t, err)
+		assert.Equal(t, "preexisting_suffix", ctx.GetDbSuffix(), "Should use preexisting suffix from context")
+
+		cfg, err := config.ReadWorktreeConfig(tmpDir)
+		require.NoError(t, err)
+		assert.Equal(t, "preexisting_suffix", cfg.DbSuffix, "Should persist preexisting suffix to worktree config")
+	})
+
+	t.Run("db.create with prefix uses existing suffix", func(t *testing.T) {
+		if _, err := exec.LookPath("mysql"); err != nil {
+			t.Skip("mysql client not found")
+		}
+
+		tmpDir := t.TempDir()
+
+		envFile := filepath.Join(tmpDir, ".env")
+		if err := os.WriteFile(envFile, []byte("DB_CONNECTION=mysql\nDB_HOST=127.0.0.1\nDB_USERNAME=root\nDB_PASSWORD=root\n"), 0644); err != nil {
+			t.Fatalf("writing env file: %v", err)
+		}
+
+		ctx := &types.ScaffoldContext{
+			WorktreePath: tmpDir,
+			SiteName:     "testapp",
+		}
+		ctx.SetDbSuffix("shared_suffix")
+
+		step := NewDbCreateStep(config.StepConfig{
+			Args: []string{"--prefix", "app"},
+		}, 8)
+
+		err := step.Run(ctx, types.StepOptions{Verbose: false})
+		assert.NoError(t, err)
+		assert.Equal(t, "shared_suffix", ctx.GetDbSuffix(), "Should use shared suffix from context")
+	})
 }
 
 func TestDbDestroyStep(t *testing.T) {

@@ -7,6 +7,7 @@ import (
 	"github.com/michaeldyrynda/arbor/internal/config"
 	"github.com/michaeldyrynda/arbor/internal/scaffold/steps"
 	"github.com/michaeldyrynda/arbor/internal/scaffold/types"
+	"github.com/michaeldyrynda/arbor/internal/scaffold/words"
 )
 
 type ScaffoldManager struct {
@@ -152,6 +153,23 @@ func (m *ScaffoldManager) RunScaffold(worktreePath, branch, repoName, siteName, 
 		Path:         path,
 		RepoPath:     repoPath,
 		Vars:         make(map[string]string),
+	}
+
+	worktreeConfig, err := config.ReadWorktreeConfig(worktreePath)
+	if err != nil {
+		return fmt.Errorf("reading worktree config: %w", err)
+	}
+
+	if worktreeConfig.DbSuffix == "" {
+		newSuffix := words.GenerateSuffix()
+		ctx.SetDbSuffix(newSuffix)
+		if !dryRun {
+			if err := config.WriteWorktreeConfig(worktreePath, map[string]string{"db_suffix": newSuffix}); err != nil {
+				return fmt.Errorf("writing db_suffix to worktree config: %w", err)
+			}
+		}
+	} else {
+		ctx.SetDbSuffix(worktreeConfig.DbSuffix)
 	}
 
 	stepsList, err := m.GetStepsForWorktree(cfg, worktreePath, branch)

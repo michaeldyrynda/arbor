@@ -99,9 +99,13 @@ func (s *DbCreateStep) detectEngine(ctx *types.ScaffoldContext) (string, error) 
 	return "", fmt.Errorf("database type not specified and DB_CONNECTION not found in .env")
 }
 
-const maxDbCreateRetries = 5
+func (s *DbCreateStep) getPrefixOrSiteName(ctx *types.ScaffoldContext) string {
+	for i, arg := range s.args {
+		if arg == "--prefix" && i+1 < len(s.args) {
+			return s.args[i+1]
+		}
+	}
 
-func (s *DbCreateStep) createWithRetry(ctx *types.ScaffoldContext, engine string, opts types.StepOptions) error {
 	siteName := ctx.SiteName
 	if siteName == "" {
 		env := utils.ReadEnvFile(ctx.WorktreePath, ".env")
@@ -110,12 +114,28 @@ func (s *DbCreateStep) createWithRetry(ctx *types.ScaffoldContext, engine string
 	if siteName == "" {
 		siteName = "app"
 	}
+	return siteName
+}
+
+const maxDbCreateRetries = 5
+
+func (s *DbCreateStep) createWithRetry(ctx *types.ScaffoldContext, engine string, opts types.StepOptions) error {
+	siteName := s.getPrefixOrSiteName(ctx)
 
 	var lastErr error
 	for attempt := 0; attempt < maxDbCreateRetries; attempt++ {
-		dbName := words.GenerateDatabaseName(siteName, 0)
-		suffix := words.ExtractSuffix(dbName)
-		ctx.SetDbSuffix(suffix)
+		var dbName string
+		var suffix string
+
+		existingSuffix := ctx.GetDbSuffix()
+		if existingSuffix != "" {
+			suffix = existingSuffix
+			dbName = fmt.Sprintf("%s_%s", siteName, suffix)
+		} else {
+			dbName = words.GenerateDatabaseName(siteName, 0)
+			suffix = words.ExtractSuffix(dbName)
+			ctx.SetDbSuffix(suffix)
+		}
 
 		if opts.Verbose {
 			fmt.Printf("  Generated database name: %s (attempt %d/%d)\n", dbName, attempt+1, maxDbCreateRetries)

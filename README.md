@@ -159,13 +159,30 @@ All steps support template variables that are replaced at runtime:
 
 ```yaml
 - name: db.create
-  type: mysql  # or pgsql, auto-detected from DB_CONNECTION if omitted
+  type: mysql       # or pgsql, auto-detected from DB_CONNECTION if omitted
+  args: ["--prefix", "app"]  # optional: customize database prefix
 ```
 
-- Generates unique name: `{site_name}_{adjective}_{noun}`
+- Generates unique name: `{prefix}_{adjective}_{noun}` or `{site_name}_{adjective}_{noun}`
+- Suffix is generated once per `init` or `work` invocation and shared across all `db.create` steps
 - Auto-detects engine from `DB_CONNECTION` in `.env`
 - Retries up to 5 times on collision
 - Persists suffix to worktree-local `arbor.yaml` for cleanup
+
+**Multiple databases with shared suffix:**
+
+```yaml
+scaffold:
+  steps:
+    - name: db.create
+      args: ["--prefix", "app"]
+    - name: db.create
+      args: ["--prefix", "quotes"]
+    - name: db.create
+      args: ["--prefix", "knowledge"]
+```
+
+Result: Creates `app_cool_engine`, `quotes_cool_engine`, `knowledge_cool_engine` (same suffix, different prefixes)
 
 **`db.destroy`** - Clean up databases matching suffix pattern
 
@@ -297,6 +314,7 @@ All steps support these configuration options:
 | `enabled` | boolean | Enable/disable step (default: true) |
 | `priority` | integer | Execution order (lower runs first, default: 0) |
 | `condition` | object | Conditional execution rules |
+| `args` | array | Arguments passed to the step (e.g., `["--prefix", "app"]`) |
 
 ### Conditions
 
@@ -361,11 +379,53 @@ cleanup:
     - name: db.destroy
 ```
 
+**Example: Multiple databases with shared suffix**
+
+For applications that need multiple databases (e.g., main app, quotes, knowledge):
+
+```yaml
+scaffold:
+  steps:
+    # Create three databases with different prefixes but shared suffix
+    - name: db.create
+      args: ["--prefix", "app"]
+      priority: 5
+
+    - name: db.create
+      args: ["--prefix", "quotes"]
+      priority: 6
+
+    - name: db.create
+      args: ["--prefix", "knowledge"]
+      priority: 7
+
+    # Write the main database name to .env
+    - name: env.write
+      priority: 10
+      key: DB_DATABASE
+      value: "app_{{ .DbSuffix }}"
+
+    # Write other database names to .env (optional)
+    - name: env.write
+      priority: 11
+      key: DB_QUOTES_DATABASE
+      value: "quotes_{{ .DbSuffix }}"
+
+    - name: env.write
+      priority: 12
+      key: DB_KNOWLEDGE_DATABASE
+      value: "knowledge_{{ .DbSuffix }}"
+```
+
+This creates: `app_cool_engine`, `quotes_cool_engine`, `knowledge_cool_engine`
+
 ### What We Handle For You
 
 **Database Naming**
 - Automatically generates unique, readable database names
-- Format: `{site_name}_{adjective}_{noun}` (e.g., `myapp_swift_runner`)
+- Suffix is generated once per `init` or `work` invocation
+- Format: `{prefix}_{adjective}_{noun}` or `{site_name}_{adjective}_{noun}` (e.g., `myapp_swift_runner`, `app_cool_engine`)
+- Multiple `db.create` steps share the same suffix, allowing consistent database naming
 - Handles collisions with automatic retries
 - Enforces PostgreSQL/MySQL length limits
 
