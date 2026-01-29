@@ -2,6 +2,7 @@ package scaffold
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -49,6 +50,10 @@ APP_NAME=original_app
 
 func TestIntegration_DatabaseCreationWithEnv(t *testing.T) {
 	t.Run("db.create generates suffix and persists to worktree config", func(t *testing.T) {
+		if _, err := exec.LookPath("mysql"); err != nil {
+			t.Skip("mysql client not found")
+		}
+
 		tmpDir := t.TempDir()
 
 		envContent := `DB_CONNECTION=mysql
@@ -115,6 +120,10 @@ func TestIntegration_EnvReadWriteFlow(t *testing.T) {
 
 func TestIntegration_DatabaseCreateEnvWriteMigrate(t *testing.T) {
 	t.Run("db.create → env.write → template in write step", func(t *testing.T) {
+		if _, err := exec.LookPath("mysql"); err != nil {
+			t.Skip("mysql client not found")
+		}
+
 		tmpDir := t.TempDir()
 
 		envContent := `DB_CONNECTION=mysql
@@ -190,6 +199,10 @@ func TestIntegration_BunIntegration(t *testing.T) {
 
 func TestIntegration_FullLifecycle(t *testing.T) {
 	t.Run("simulate full workflow: create db, write env, cleanup", func(t *testing.T) {
+		if _, err := exec.LookPath("mysql"); err != nil {
+			t.Skip("mysql client not found")
+		}
+
 		tmpDir := t.TempDir()
 
 		envContent := `DB_CONNECTION=mysql

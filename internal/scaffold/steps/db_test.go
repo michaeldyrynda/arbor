@@ -51,6 +51,10 @@ func TestDbCreateStep(t *testing.T) {
 	})
 
 	t.Run("auto-detects mysql engine from DB_CONNECTION env", func(t *testing.T) {
+		if _, err := exec.LookPath("mysql"); err != nil {
+			t.Skip("mysql client not found")
+		}
+
 		tmpDir := t.TempDir()
 
 		envFile := filepath.Join(tmpDir, ".env")
@@ -116,6 +120,10 @@ func TestDbCreateStep(t *testing.T) {
 	})
 
 	t.Run("generates database name with site name and suffix", func(t *testing.T) {
+		if _, err := exec.LookPath("mysql"); err != nil {
+			t.Skip("mysql client not found")
+		}
+
 		tmpDir := t.TempDir()
 
 		envFile := filepath.Join(tmpDir, ".env")
@@ -140,6 +148,10 @@ func TestDbCreateStep(t *testing.T) {
 	})
 
 	t.Run("writes DbSuffix to worktree-local arbor.yaml", func(t *testing.T) {
+		if _, err := exec.LookPath("mysql"); err != nil {
+			t.Skip("mysql client not found")
+		}
+
 		tmpDir := t.TempDir()
 
 		envFile := filepath.Join(tmpDir, ".env")
@@ -165,6 +177,10 @@ func TestDbCreateStep(t *testing.T) {
 	})
 
 	t.Run("reads APP_NAME from .env if SiteName is empty", func(t *testing.T) {
+		if _, err := exec.LookPath("mysql"); err != nil {
+			t.Skip("mysql client not found")
+		}
+
 		tmpDir := t.TempDir()
 
 		envFile := filepath.Join(tmpDir, ".env")
@@ -184,6 +200,10 @@ func TestDbCreateStep(t *testing.T) {
 	})
 
 	t.Run("sanitizes site name for database generation", func(t *testing.T) {
+		if _, err := exec.LookPath("mysql"); err != nil {
+			t.Skip("mysql client not found")
+		}
+
 		tmpDir := t.TempDir()
 
 		envFile := filepath.Join(tmpDir, ".env")
@@ -243,6 +263,10 @@ func TestDbCreateStep(t *testing.T) {
 	})
 
 	t.Run("collision retry logic tested via mock", func(t *testing.T) {
+		if _, err := exec.LookPath("mysql"); err != nil {
+			t.Skip("mysql client not found")
+		}
+
 		tmpDir := t.TempDir()
 
 		envFile := filepath.Join(tmpDir, ".env")
@@ -316,6 +340,10 @@ func TestDbDestroyStep(t *testing.T) {
 	})
 
 	t.Run("auto-detects mysql engine from DB_CONNECTION env", func(t *testing.T) {
+		if _, err := exec.LookPath("mysql"); err != nil {
+			t.Skip("mysql client not found")
+		}
+
 		tmpDir := t.TempDir()
 
 		envFile := filepath.Join(tmpDir, ".env")
@@ -379,6 +407,10 @@ func TestDbDestroyStep(t *testing.T) {
 	})
 
 	t.Run("uses DbSuffix from context if set", func(t *testing.T) {
+		if _, err := exec.LookPath("mysql"); err != nil {
+			t.Skip("mysql client not found")
+		}
+
 		tmpDir := t.TempDir()
 
 		envFile := filepath.Join(tmpDir, ".env")
