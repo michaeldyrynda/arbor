@@ -2,7 +2,6 @@ package scaffold
 
 import (
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -53,10 +52,6 @@ APP_NAME=original_app
 
 func TestIntegration_DatabaseCreationWithEnv(t *testing.T) {
 	t.Run("db.create generates suffix and persists to worktree config", func(t *testing.T) {
-		if _, err := exec.LookPath("mysql"); err != nil {
-			t.Skip("mysql client not found")
-		}
-
 		tmpDir := t.TempDir()
 
 		envContent := `DB_CONNECTION=mysql
@@ -74,7 +69,8 @@ APP_NAME=myapp
 			Branch:       "test",
 		}
 
-		dbStep := steps.Create("db.create", config.StepConfig{})
+		mockClient := steps.NewMockDatabaseClient()
+		dbStep := steps.NewDbCreateStepWithFactory(config.StepConfig{}, 8, steps.MockClientFactory(mockClient))
 		require.NotNil(t, dbStep)
 		err := dbStep.Run(ctx, types.StepOptions{Verbose: false})
 		require.NoError(t, err)
@@ -125,10 +121,6 @@ func TestIntegration_EnvReadWriteFlow(t *testing.T) {
 
 func TestIntegration_DatabaseCreateEnvWriteMigrate(t *testing.T) {
 	t.Run("db.create → env.write → template in write step", func(t *testing.T) {
-		if _, err := exec.LookPath("mysql"); err != nil {
-			t.Skip("mysql client not found")
-		}
-
 		tmpDir := t.TempDir()
 
 		envContent := `DB_CONNECTION=mysql
@@ -146,7 +138,8 @@ APP_NAME=myapp
 			Branch:       "test",
 		}
 
-		dbStep := steps.Create("db.create", config.StepConfig{})
+		mockClient := steps.NewMockDatabaseClient()
+		dbStep := steps.NewDbCreateStepWithFactory(config.StepConfig{}, 8, steps.MockClientFactory(mockClient))
 		require.NotNil(t, dbStep)
 		err := dbStep.Run(ctx, types.StepOptions{Verbose: false})
 		require.NoError(t, err)
@@ -210,10 +203,6 @@ func TestIntegration_BunIntegration(t *testing.T) {
 
 func TestIntegration_FullLifecycle(t *testing.T) {
 	t.Run("simulate full workflow: create db, write env, cleanup", func(t *testing.T) {
-		if _, err := exec.LookPath("mysql"); err != nil {
-			t.Skip("mysql client not found")
-		}
-
 		tmpDir := t.TempDir()
 
 		envContent := `DB_CONNECTION=mysql
@@ -232,7 +221,8 @@ APP_NAME=myapp
 			Path:         "feature-auth",
 		}
 
-		dbStep := steps.Create("db.create", config.StepConfig{})
+		mockClient := steps.NewMockDatabaseClient()
+		dbStep := steps.NewDbCreateStepWithFactory(config.StepConfig{}, 8, steps.MockClientFactory(mockClient))
 		require.NotNil(t, dbStep)
 		err := dbStep.Run(ctx, types.StepOptions{Verbose: false})
 		require.NoError(t, err)
@@ -259,7 +249,7 @@ APP_NAME=myapp
 		require.NoError(t, err)
 		assert.Contains(t, string(content), "APP_DOMAIN=app.feature-auth.test")
 
-		destroyStep := steps.Create("db.destroy", config.StepConfig{})
+		destroyStep := steps.NewDbDestroyStepWithFactory(config.StepConfig{}, steps.MockClientFactory(mockClient))
 		require.NotNil(t, destroyStep)
 		err = destroyStep.Run(ctx, types.StepOptions{Verbose: false})
 		require.NoError(t, err)
@@ -326,10 +316,6 @@ APP_NAME=myapp
 
 func TestIntegration_MultipleDatabasesSharedSuffix(t *testing.T) {
 	t.Run("multiple db.create steps share same suffix", func(t *testing.T) {
-		if _, err := exec.LookPath("mysql"); err != nil {
-			t.Skip("mysql client not found")
-		}
-
 		tmpDir := t.TempDir()
 
 		envContent := `DB_CONNECTION=mysql
@@ -350,7 +336,10 @@ APP_NAME=myapp
 			Vars:         make(map[string]string),
 		}
 
-		appStep := steps.Create("db.create", config.StepConfig{Args: []string{"--prefix", "app"}, Priority: 8})
+		mockClient := steps.NewMockDatabaseClient()
+		factory := steps.MockClientFactory(mockClient)
+
+		appStep := steps.NewDbCreateStepWithFactory(config.StepConfig{Args: []string{"--prefix", "app"}, Priority: 8}, 8, factory)
 		require.NotNil(t, appStep)
 		err := appStep.Run(ctx, types.StepOptions{Verbose: false})
 		require.NoError(t, err)
@@ -358,7 +347,7 @@ APP_NAME=myapp
 		firstSuffix := ctx.GetDbSuffix()
 		assert.NotEmpty(t, firstSuffix, "First db.create should set suffix")
 
-		quotesStep := steps.Create("db.create", config.StepConfig{Args: []string{"--prefix", "quotes"}, Priority: 8})
+		quotesStep := steps.NewDbCreateStepWithFactory(config.StepConfig{Args: []string{"--prefix", "quotes"}, Priority: 8}, 8, factory)
 		require.NotNil(t, quotesStep)
 		err = quotesStep.Run(ctx, types.StepOptions{Verbose: false})
 		require.NoError(t, err)
@@ -366,7 +355,7 @@ APP_NAME=myapp
 		secondSuffix := ctx.GetDbSuffix()
 		assert.NotEmpty(t, secondSuffix, "Second db.create should set suffix")
 
-		knowledgeStep := steps.Create("db.create", config.StepConfig{Args: []string{"--prefix", "knowledge"}, Priority: 8})
+		knowledgeStep := steps.NewDbCreateStepWithFactory(config.StepConfig{Args: []string{"--prefix", "knowledge"}, Priority: 8}, 8, factory)
 		require.NotNil(t, knowledgeStep)
 		err = knowledgeStep.Run(ctx, types.StepOptions{Verbose: false})
 		require.NoError(t, err)
@@ -380,5 +369,11 @@ APP_NAME=myapp
 		cfg, err := config.ReadWorktreeConfig(tmpDir)
 		require.NoError(t, err)
 		assert.Equal(t, firstSuffix, cfg.DbSuffix, "Suffix should be persisted to worktree config")
+
+		createCalls := mockClient.GetCreateCalls()
+		assert.Len(t, createCalls, 3, "Should have created 3 databases")
+		assert.True(t, strings.HasPrefix(createCalls[0], "app_"), "First db should use 'app' prefix")
+		assert.True(t, strings.HasPrefix(createCalls[1], "quotes_"), "Second db should use 'quotes' prefix")
+		assert.True(t, strings.HasPrefix(createCalls[2], "knowledge_"), "Third db should use 'knowledge' prefix")
 	})
 }

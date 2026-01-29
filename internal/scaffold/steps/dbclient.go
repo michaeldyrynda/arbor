@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	_ "github.com/go-sql-driver/mysql"
-	_ "github.com/lib/pq"
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 // DatabaseClient abstracts database operations for testability
@@ -133,7 +133,7 @@ func NewPostgreSQLClient(opts DatabaseOptions) (*PostgreSQLClient, error) {
 
 	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=postgres sslmode=disable",
 		opts.Host, opts.Port, opts.Username, opts.Password)
-	db, err := sql.Open("postgres", dsn)
+	db, err := sql.Open("pgx", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("opening postgres connection: %w", err)
 	}
