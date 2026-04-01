@@ -11,15 +11,16 @@ import (
 	"github.com/artisanexperiences/arbor/internal/git"
 	"github.com/artisanexperiences/arbor/internal/scaffold/types"
 	"github.com/artisanexperiences/arbor/internal/ui"
+	"github.com/artisanexperiences/arbor/internal/workspace"
 )
 
 var removeCmd = &cobra.Command{
 	Use:   "remove [FOLDER]",
-	Short: "Remove a worktree with cleanup",
-	Long: `Removes a worktree and runs preset-defined cleanup steps.
+	Short: "Remove a workspace with cleanup",
+	Long: `Removes a workspace and runs preset-defined cleanup steps.
 
 Arguments:
-  FOLDER  Name of the worktree folder to remove (e.g., feature-test-change)
+  FOLDER  Name of the workspace folder to remove (e.g., feature-test-change)
 
 Cleanup steps may include:
   - Removing Herd site links
@@ -36,28 +37,29 @@ Cleanup steps may include:
 		verbose := mustGetBool(cmd, "verbose")
 		quiet := mustGetBool(cmd, "quiet")
 
-		currentWorktreePath, err := os.Getwd()
+		currentWorkspacePath, err := os.Getwd()
 		if err != nil {
 			return fmt.Errorf("getting current directory: %w", err)
 		}
 
-		defaultBranch, err := git.GetDefaultBranch(pc.BarePath)
+		wsManager := pc.WorkspaceManager()
+
+		workspaces, err := wsManager.ListWorkspacesDetailed(currentWorkspacePath)
 		if err != nil {
-			return fmt.Errorf("getting default branch: %w", err)
+			return fmt.Errorf("listing workspaces: %w", err)
 		}
 
-		worktrees, err := git.ListWorktreesDetailed(pc.BarePath, currentWorktreePath, defaultBranch)
-		if err != nil {
-			return fmt.Errorf("listing worktrees: %w", err)
-		}
+		// Convert to git.Worktree for existing UI functions
+		gitWorktrees := workspacesToGitWorktrees(workspaces)
 
 		var targetWorktree *git.Worktree
 
 		if len(args) > 0 {
 			folderName := args[0]
-			for _, wt := range worktrees {
+			for _, wt := range gitWorktrees {
 				if filepath.Base(wt.Path) == folderName {
-					targetWorktree = &wt
+					wtCopy := wt
+					targetWorktree = &wtCopy
 					break
 				}
 			}
@@ -65,7 +67,7 @@ Cleanup steps may include:
 				return fmt.Errorf("worktree '%s' not found: %w", folderName, arborerrors.ErrWorktreeNotFound)
 			}
 		} else if ui.IsInteractive() {
-			selected, err := ui.SelectWorktreeToRemove(worktrees)
+			selected, err := ui.SelectWorktreeToRemove(gitWorktrees)
 			if err != nil {
 				return fmt.Errorf("selecting worktree: %w", err)
 			}
@@ -96,17 +98,21 @@ Cleanup steps may include:
 				return nil
 			}
 
-			if git.BranchExists(pc.BarePath, targetWorktree.Branch) {
+			// Branch deletion only makes sense in worktree mode where there is a shared bare repo
+			if pc.Mode == workspace.ModeWorktree && git.BranchExists(pc.BarePath, targetWorktree.Branch) {
 				deleteBranch, err = ui.Confirm(fmt.Sprintf("Also delete branch '%s'?", targetWorktree.Branch))
 				if err != nil {
 					return fmt.Errorf("branch deletion confirmation: %w", err)
 				}
 			}
 		} else {
-			deleteBranch = mustGetBool(cmd, "delete-branch")
+			// --delete-branch only applicable in worktree mode
+			if pc.Mode == workspace.ModeWorktree {
+				deleteBranch = mustGetBool(cmd, "delete-branch")
+			}
 		}
 
-		ui.PrintStep("Removing worktree")
+		ui.PrintStep("Removing workspace")
 
 		if !dryRun {
 			preset := pc.Config.Preset
@@ -131,12 +137,13 @@ Cleanup steps may include:
 				}
 			}
 
-			if err := git.RemoveWorktree(targetWorktree.Path, true); err != nil {
-				return fmt.Errorf("removing worktree: %w", err)
+			if err := wsManager.RemoveWorkspace(targetWorktree.Path, true); err != nil {
+				return fmt.Errorf("removing workspace: %w", err)
 			}
 			ui.PrintSuccessPath("Removed", targetWorktree.Path)
 
-			if deleteBranch && git.BranchExists(pc.BarePath, targetWorktree.Branch) {
+			// Branch deletion: only in worktree mode
+			if deleteBranch && pc.Mode == workspace.ModeWorktree && git.BranchExists(pc.BarePath, targetWorktree.Branch) {
 				if err := git.DeleteBranch(pc.BarePath, targetWorktree.Branch, true); err != nil {
 					ui.PrintErrorWithHint("Failed to delete branch", err.Error())
 				} else {
@@ -152,13 +159,13 @@ Cleanup steps may include:
 				}
 			}
 		} else {
-			ui.PrintInfo("[DRY RUN] Would run cleanup and remove worktree")
+			ui.PrintInfo("[DRY RUN] Would run cleanup and remove workspace")
 			if deleteBranch {
 				ui.PrintInfo("[DRY RUN] Would delete branch")
 			}
 		}
 
-		ui.PrintDone("Worktree removed")
+		ui.PrintDone("Workspace removed")
 		return nil
 	},
 }
@@ -167,5 +174,21 @@ func init() {
 	rootCmd.AddCommand(removeCmd)
 
 	removeCmd.Flags().BoolP("force", "f", false, "Skip confirmation and cleanup prompts")
-	removeCmd.Flags().Bool("delete-branch", false, "Also delete the branch after removing worktree")
+	removeCmd.Flags().Bool("delete-branch", false, "Also delete the branch after removing worktree (worktree mode only)")
+}
+
+// workspacesToGitWorktrees converts workspace.Workspace slices to git.Worktree slices
+// for use with existing UI functions that expect git.Worktree.
+func workspacesToGitWorktrees(workspaces []workspace.Workspace) []git.Worktree {
+	result := make([]git.Worktree, len(workspaces))
+	for i, ws := range workspaces {
+		result[i] = git.Worktree{
+			Path:      ws.Path,
+			Branch:    ws.Branch,
+			IsMain:    ws.IsMain,
+			IsCurrent: ws.IsCurrent,
+			IsMerged:  ws.IsMerged,
+		}
+	}
+	return result
 }

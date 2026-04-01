@@ -69,19 +69,23 @@ go build -ldflags "-X main.Version=$VERSION -X main.Commit=$COMMIT -X main.Build
 # Check arbor version
 arbor version
 
-# Initialise a new Laravel project
+# Initialise a new Laravel project (choose worktree or copy-on-write mode interactively)
 arbor init git@github.com:user/my-laravel-app.git
 
-# Create a feature worktree
+# Initialise with a specific workspace mode
+arbor init git@github.com:user/my-laravel-app.git --mode cow
+arbor init git@github.com:user/my-laravel-app.git --mode worktree
+
+# Create a feature workspace
 arbor work feature/user-auth
 
-# Create a worktree from a specific base branch
+# Create a workspace from a specific base branch
 arbor work feature/user-auth -b develop
 
-# Create a worktree without running scaffold steps
+# Create a workspace without running scaffold steps
 arbor work feature/user-auth --skip-scaffold
 
-# Sync current worktree with upstream (defaults to main, uses rebase)
+# Sync current workspace with upstream (defaults to main, uses rebase)
 arbor sync
 
 # Sync with a specific upstream branch
@@ -93,23 +97,27 @@ arbor sync --strategy merge
 # Save sync settings to arbor.yaml for future use
 arbor sync --upstream develop --strategy rebase --save
 
-# List all worktrees with their status
+# List all workspaces with their status
 arbor list
 
-# Remove a worktree when done
+# Remove a workspace when done
 arbor remove feature/user-auth
 
-# Clean up merged worktrees
+# Clean up merged workspaces
 arbor prune
 
-# Run scaffold steps on an existing worktree
+# Switch workspace mode (worktree ↔ copy-on-write)
+arbor switch cow
+arbor switch worktree
+
+# Run scaffold steps on an existing workspace
 arbor scaffold main
 arbor scaffold feature/user-auth
 
-# Destroy the entire project (removes worktrees and bare repo)
+# Destroy the entire project (removes all workspaces and project structure)
 arbor destroy
 
-# Pull updated config from the default branch worktree into the project root
+# Pull updated config from the default branch workspace into the project root
 arbor pull-config
 ```
 
@@ -194,6 +202,28 @@ The command resolves settings in this order:
 - Detects and blocks if rebase or merge is already in progress
 - Provides guidance when conflicts occur
 
+### `arbor switch [MODE]`
+
+Converts the project between **worktree** and **copy-on-write** modes. Feature workspaces are removed during the switch (they can be recreated with `arbor work <branch>`).
+
+```bash
+# Switch a worktree-mode project to CoW
+arbor switch cow
+
+# Switch a CoW project back to worktree mode
+arbor switch worktree
+
+# Skip confirmation prompts
+arbor switch cow --force
+```
+
+**What happens during a switch:**
+1. Lists any feature workspaces that will be removed
+2. Prompts for confirmation (skip with `--force`)
+3. Removes all feature workspaces
+4. Converts the project structure (`.bare` ↔ `.arbor`)
+5. Updates `arbor.yaml` with the new `workspace_mode`
+
 ### `arbor scaffold [PATH]`
 
 Run scaffold steps for an existing worktree. This is useful when:
@@ -262,6 +292,64 @@ arbor scaffold main
 arbor scaffold feature/my-feature
 ```
 
+## Workspace Modes
+
+Arbor supports two ways to manage parallel feature workspaces. Choose at `arbor init` time, or switch later with `arbor switch`.
+
+### Worktree Mode (default)
+
+The traditional mode. Uses a single bare git repository (`.bare/`) with linked git worktrees for each branch. The object store is shared, so additional workspaces cost only the working-tree files.
+
+```
+my-project/
+  .bare/          # Shared bare git repo
+  arbor.yaml
+  main/           # Default branch worktree
+  feature-foo/    # Feature branch worktree
+```
+
+### Copy-on-Write (CoW) Mode
+
+Each workspace is a full, independent git clone. On filesystems that support copy-on-write (APFS on macOS, Btrfs/XFS on Linux), new workspaces are created using filesystem-level cloning — they take zero additional disk space until files are actually modified.
+
+```
+my-project/
+  .arbor/         # CoW project marker
+  arbor.yaml
+  main/           # Normal git clone (default branch)
+  feature-foo/    # CoW clone of main
+```
+
+**Benefits:**
+- Near-instant workspace creation (cloning is a filesystem operation)
+- Shared disk blocks for unmodified files (`vendor/`, `node_modules/`, source code)
+- Fully independent git repos — no shared `.bare` lock contention
+- Compatible with all git tools and IDEs (normal `.git/` directories)
+
+**Requirements for full CoW benefits:**
+- macOS with APFS filesystem (default since macOS High Sierra)
+- Linux with Btrfs or XFS (with reflink support enabled)
+- Falls back to regular copy on unsupported filesystems (works, just without disk savings)
+
+```bash
+# Choose CoW at init time
+arbor init git@github.com:user/repo.git --mode cow
+
+# Or switch an existing project
+arbor switch cow       # worktree → CoW
+arbor switch worktree  # CoW → worktree
+```
+
+> **Note:** `arbor switch` removes feature workspaces that cannot be migrated in-place. Recreate them with `arbor work <branch>` after switching.
+
+### `workspace_mode` Config
+
+The mode is stored in `arbor.yaml` at the project root:
+
+```yaml
+workspace_mode: cow       # or "worktree" (default when absent)
+```
+
 ## Configuration
 
 Arbor uses a three-tier configuration system to separate team configuration from local state.
@@ -270,7 +358,7 @@ Arbor uses a three-tier configuration system to separate team configuration from
 
 #### 1. Project Config (`<project-root>/arbor.yaml`)
 
-Located at the project root (alongside `.bare/`), this file contains:
+Located at the project root (alongside `.bare/` or `.arbor/`), this file contains:
 - Scaffold steps and cleanup steps
 - Preset selection
 - Tool configurations

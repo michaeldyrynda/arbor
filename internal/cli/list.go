@@ -14,10 +14,10 @@ import (
 
 var listCmd = &cobra.Command{
 	Use:   "list",
-	Short: "List all worktrees",
-	Long: `List all worktrees in the repository with their status.
+	Short: "List all workspaces",
+	Long: `List all workspaces in the repository with their status.
 
-Shows worktrees with merge status, current worktree indicator,
+Shows workspaces with merge status, current workspace indicator,
 and main branch highlighting.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		pc, err := OpenProjectFromCWD()
@@ -30,11 +30,13 @@ and main branch highlighting.`,
 		sortBy := mustGetString(cmd, "sort-by")
 		reverse := mustGetBool(cmd, "reverse")
 
-		worktrees, err := git.ListWorktreesDetailed(pc.BarePath, pc.CWD, pc.DefaultBranch)
+		workspaces, err := pc.WorkspaceManager().ListWorkspacesDetailed(pc.CWD)
 		if err != nil {
-			return fmt.Errorf("listing worktrees: %w", err)
+			return fmt.Errorf("listing workspaces: %w", err)
 		}
 
+		// Convert to git.Worktree for existing UI/sort functions
+		worktrees := workspacesToGitWorktrees(workspaces)
 		worktrees = git.SortWorktrees(worktrees, sortBy, reverse)
 
 		if jsonOutput {
@@ -51,7 +53,7 @@ and main branch highlighting.`,
 
 func printTable(w io.Writer, worktrees []git.Worktree) error {
 	if len(worktrees) == 0 {
-		_, err := fmt.Fprintln(w, "No worktrees found.")
+		_, err := fmt.Fprintln(w, "No workspaces found.")
 		return err
 	}
 

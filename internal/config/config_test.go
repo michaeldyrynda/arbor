@@ -189,6 +189,54 @@ scaffold:
 	assert.False(t, *step.Enabled)
 }
 
+func TestConfig_WorkspaceModeField_Cow(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	configContent := `preset: laravel
+default_branch: main
+workspace_mode: cow
+`
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "arbor.yaml"), []byte(configContent), 0644))
+
+	cfg, err := LoadProject(tmpDir)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, cfg)
+	assert.Equal(t, "cow", cfg.WorkspaceMode)
+}
+
+func TestConfig_WorkspaceModeField_Worktree(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	configContent := `preset: laravel
+default_branch: main
+workspace_mode: worktree
+`
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "arbor.yaml"), []byte(configContent), 0644))
+
+	cfg, err := LoadProject(tmpDir)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, cfg)
+	assert.Equal(t, "worktree", cfg.WorkspaceMode)
+}
+
+func TestConfig_WorkspaceModeDefault(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Config without workspace_mode should default to empty string (treated as worktree)
+	configContent := `preset: laravel
+default_branch: main
+`
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "arbor.yaml"), []byte(configContent), 0644))
+
+	cfg, err := LoadProject(tmpDir)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, cfg)
+	assert.Equal(t, "", cfg.WorkspaceMode, "workspace_mode should default to empty string for backward compatibility")
+}
+
 func loadGlobalFromTestDir(testDir string) (*GlobalConfig, error) {
 	v := viper.New()
 

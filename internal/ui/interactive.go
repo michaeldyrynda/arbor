@@ -157,6 +157,38 @@ func Confirm(message string) (bool, error) {
 	return confirmed, nil
 }
 
+// PromptWorkspaceMode presents an interactive select asking the user to choose
+// between worktree mode and copy-on-write mode. Returns the chosen mode string
+// ("worktree" or "cow").
+func PromptWorkspaceMode() (string, error) {
+	var selected string
+
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewSelect[string]().
+				Title("Workspace mode").
+				Description("How should Arbor manage parallel workspaces for this project?").
+				Options(
+					huh.NewOption(
+						"Worktrees (traditional) — shared object store, slightly less disk",
+						"worktree",
+					),
+					huh.NewOption(
+						"Copy-on-write — independent clones, best disk efficiency on APFS/Btrfs",
+						"cow",
+					),
+				).
+				Value(&selected),
+		),
+	).WithTheme(huh.ThemeCatppuccin())
+
+	if err := form.Run(); err != nil {
+		return "", NormalizeAbort(err)
+	}
+
+	return selected, nil
+}
+
 func PromptRepoURL() (string, error) {
 	var repo string
 

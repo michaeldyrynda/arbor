@@ -74,8 +74,8 @@ func TestPrintTable_Empty(t *testing.T) {
 	}
 
 	output := buf.String()
-	if !strings.Contains(output, "No worktrees found") {
-		t.Errorf("expected 'No worktrees found' message, got: %s", output)
+	if !strings.Contains(output, "No workspaces found") {
+		t.Errorf("expected 'No workspaces found' message, got: %s", output)
 	}
 }
 

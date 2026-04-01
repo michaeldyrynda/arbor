@@ -8,6 +8,7 @@ import (
 	"github.com/artisanexperiences/arbor/internal/config"
 	"github.com/artisanexperiences/arbor/internal/git"
 	"github.com/artisanexperiences/arbor/internal/ui"
+	"github.com/artisanexperiences/arbor/internal/workspace"
 )
 
 var syncCmd = &cobra.Command{
@@ -49,6 +50,15 @@ Configuration can be set via flags, project config (arbor.yaml), or interactivel
 		saveFlag := mustGetBool(cmd, "save")
 		yesFlag := mustGetBool(cmd, "yes")
 		noAutoStashFlag := mustGetBool(cmd, "no-auto-stash")
+
+		// In CoW mode there is no bare repo — git operations run against the
+		// current workspace directory instead.
+		var gitRefsPath string
+		if pc.Mode == workspace.ModeCow {
+			gitRefsPath = pc.CWD
+		} else {
+			gitRefsPath = pc.BarePath
+		}
 
 		// Get current branch
 		currentBranch, err := git.GetCurrentBranch(pc.CWD)
@@ -145,12 +155,12 @@ Configuration can be set via flags, project config (arbor.yaml), or interactivel
 		if shouldPrompt {
 			// Prompt for upstream if not set via flag or config
 			if upstreamFlag == "" && pc.Config.Sync.Upstream == "" {
-				localBranches, err := git.ListLocalBranches(pc.BarePath)
+				localBranches, err := git.ListLocalBranches(gitRefsPath)
 				if err != nil {
 					return fmt.Errorf("listing local branches: %w", err)
 				}
 
-				remoteBranches, _ := git.ListRemoteBranches(pc.BarePath)
+				remoteBranches, _ := git.ListRemoteBranches(gitRefsPath)
 
 				selected, err := ui.SelectUpstreamBranch(localBranches, remoteBranches, pc.DefaultBranch)
 				if err != nil {
@@ -184,7 +194,7 @@ Configuration can be set via flags, project config (arbor.yaml), or interactivel
 		}
 
 		// Check remote exists
-		remoteURL, err := git.GetRemoteURL(pc.BarePath, remote)
+		remoteURL, err := git.GetRemoteURL(gitRefsPath, remote)
 		if err != nil {
 			return fmt.Errorf("checking remote: %w", err)
 		}
@@ -226,7 +236,7 @@ Configuration can be set via flags, project config (arbor.yaml), or interactivel
 		if verbose && !quiet {
 			ui.PrintInfo(fmt.Sprintf("Fetching from %s", remote))
 		}
-		if err := git.FetchRemote(pc.BarePath, remote); err != nil {
+		if err := git.FetchRemote(gitRefsPath, remote); err != nil {
 			return fmt.Errorf("fetch failed: %w", err)
 		}
 		if !quiet {

@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.0] - 2026-04-01
+
+### Added
+
+- **Copy-on-write (CoW) workspace mode** - New alternative to git worktrees that uses filesystem-level cloning. On APFS (macOS) and Btrfs/XFS (Linux), new workspaces are created instantly and share disk blocks with the source until files are actually modified. Falls back to a regular copy on unsupported filesystems with a clear warning.
+- **`workspace_mode` config field** - Set `workspace_mode: cow` or `workspace_mode: worktree` in `arbor.yaml` to declare the project's workspace strategy. Existing projects without this field continue using worktree mode unchanged.
+- **`arbor init --mode` flag** - Choose workspace mode at init time with `--mode cow` or `--mode worktree`. When running interactively, Arbor prompts for the preferred mode with a description of each option.
+- **`arbor switch` command** - Bidirectional conversion between workspace modes (`arbor switch cow` or `arbor switch worktree`). Lists feature workspaces that will be removed, prompts for confirmation, then converts the full project layout including `.bare`/`.arbor` directories and `arbor.yaml`. Supports `--force` to skip confirmation.
+- **`internal/workspace` package** - New mode-agnostic abstraction layer (`Manager`, `FindProjectRoot`, `CreateWorkspace`, `RemoveWorkspace`, `ListWorkspaces`, `ListWorkspacesDetailed`) used by all CLI commands. Both modes share the same command surface.
+- **CoW filesystem detection** - `workspace.DetectCowSupport()` probes the filesystem at init/switch time and warns if native CoW is unavailable, rather than failing silently.
+
+### Changed
+
+- **All commands are now workspace-mode-aware** - `arbor work`, `arbor remove`, `arbor list`, `arbor prune`, `arbor destroy`, `arbor sync`, and `arbor pull-config` work identically in both worktree and CoW mode.
+- **Project detection supports both markers** - `FindProjectRoot()` searches parent directories for `.bare/` (worktree mode) or `.arbor/` (CoW mode). `.bare/` takes precedence when both are present for backward compatibility.
+- **`arbor sync` uses workspace git directory** - In CoW mode (no bare repo), sync operations run against the current workspace's `.git` directory rather than a shared bare repo.
+
 ## [0.13.2] - 2026-03-03
 
 ### Changed
@@ -385,6 +402,7 @@ No changes in this release.
 [0.4.2]: https://github.com/artisanexperiences/arbor/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/artisanexperiences/arbor/compare/v0.4.0...v0.4.1
 [0.3.1]: https://github.com/artisanexperiences/arbor/compare/v0.3.0...v0.3.1
+[0.14.0]: https://github.com/artisanexperiences/arbor/compare/v0.13.2...v0.14.0
 [0.13.2]: https://github.com/artisanexperiences/arbor/compare/v0.13.1...v0.13.2
 [0.13.1]: https://github.com/artisanexperiences/arbor/compare/v0.13.0...v0.13.1
 [0.13.0]: https://github.com/artisanexperiences/arbor/compare/v0.12.0...v0.13.0

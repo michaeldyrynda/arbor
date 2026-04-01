@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -76,13 +77,13 @@ custom_field: custom_value
 		}
 
 		contentStr := string(content)
-		if !contains(contentStr, "site_name: NewSite") {
+		if !strings.Contains(contentStr, "site_name: NewSite") {
 			t.Errorf("expected updated site_name not found in:\n%s", contentStr)
 		}
-		if !contains(contentStr, "preset: old_preset") {
+		if !strings.Contains(contentStr, "preset: old_preset") {
 			t.Errorf("expected preserved preset not found in:\n%s", contentStr)
 		}
-		if !contains(contentStr, "default_branch: old_branch") {
+		if !strings.Contains(contentStr, "default_branch: old_branch") {
 			t.Errorf("expected preserved default_branch not found in:\n%s", contentStr)
 		}
 	})
@@ -121,16 +122,77 @@ custom_field: custom_value
 	})
 }
 
-// Helper function to check if a string contains a substring
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsHelper(s, substr))
-}
+func TestSaveProject_WorkspaceMode(t *testing.T) {
+	t.Run("saves workspace_mode cow", func(t *testing.T) {
+		tmpDir := t.TempDir()
 
-func containsHelper(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
+		cfg := &Config{
+			SiteName:      "TestProject",
+			DefaultBranch: "main",
+			WorkspaceMode: "cow",
 		}
-	}
-	return false
+
+		if err := SaveProject(tmpDir, cfg); err != nil {
+			t.Fatalf("SaveProject failed: %v", err)
+		}
+
+		loaded, err := LoadProject(tmpDir)
+		if err != nil {
+			t.Fatalf("LoadProject failed: %v", err)
+		}
+
+		if loaded.WorkspaceMode != "cow" {
+			t.Errorf("WorkspaceMode mismatch: expected 'cow', got '%s'", loaded.WorkspaceMode)
+		}
+	})
+
+	t.Run("saves workspace_mode worktree", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		cfg := &Config{
+			SiteName:      "TestProject",
+			DefaultBranch: "main",
+			WorkspaceMode: "worktree",
+		}
+
+		if err := SaveProject(tmpDir, cfg); err != nil {
+			t.Fatalf("SaveProject failed: %v", err)
+		}
+
+		loaded, err := LoadProject(tmpDir)
+		if err != nil {
+			t.Fatalf("LoadProject failed: %v", err)
+		}
+
+		if loaded.WorkspaceMode != "worktree" {
+			t.Errorf("WorkspaceMode mismatch: expected 'worktree', got '%s'", loaded.WorkspaceMode)
+		}
+	})
+
+	t.Run("preserves existing workspace_mode when saving other fields", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		initial := `site_name: old
+default_branch: main
+workspace_mode: cow
+`
+		configPath := filepath.Join(tmpDir, "arbor.yaml")
+		if err := os.WriteFile(configPath, []byte(initial), 0644); err != nil {
+			t.Fatalf("failed to write initial config: %v", err)
+		}
+
+		// Save only site_name update – workspace_mode should be preserved
+		cfg := &Config{SiteName: "new"}
+		if err := SaveProject(tmpDir, cfg); err != nil {
+			t.Fatalf("SaveProject failed: %v", err)
+		}
+
+		content, err := os.ReadFile(configPath)
+		if err != nil {
+			t.Fatalf("failed to read config: %v", err)
+		}
+		if !strings.Contains(string(content), "workspace_mode: cow") {
+			t.Errorf("workspace_mode should be preserved, got:\n%s", content)
+		}
+	})
 }
