@@ -110,18 +110,19 @@ func printBanner() {
 
 	commands := `
 Commands:
-  init      Initialize a new repository
-  work      Create or checkout a worktree
-  list      List all worktrees
-  sync      Sync current worktree with upstream branch
-  remove    Remove a worktree
-  prune     Remove merged worktrees
-  scaffold  Run scaffold steps for a worktree
+  init        Initialize a new repository (worktree or copy-on-write mode)
+  work        Create or checkout a workspace
+  list        List all workspaces
+  sync        Sync current workspace with upstream branch
+  remove      Remove a workspace
+  prune       Remove merged workspaces
+  switch      Switch workspace mode (worktree ↔ copy-on-write)
+  scaffold    Run scaffold steps for a workspace
   repair      Repair git configuration for existing project
-  pull-config Update project config from the default branch worktree
+  pull-config Update project config from the default branch workspace
   destroy     Completely destroy an arbor project
-  install   Setup global configuration
-  version   Show arbor version
+  install     Setup global configuration
+  version     Show arbor version
 
 Run 'arbor <command> --help' for more information.`
 

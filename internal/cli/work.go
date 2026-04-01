@@ -13,6 +13,7 @@ import (
 	"github.com/artisanexperiences/arbor/internal/scaffold/types"
 	"github.com/artisanexperiences/arbor/internal/ui"
 	"github.com/artisanexperiences/arbor/internal/utils"
+	"github.com/artisanexperiences/arbor/internal/workspace"
 )
 
 var workCmd = &cobra.Command{
@@ -43,14 +44,23 @@ available branches or entering a new branch name.`,
 		if len(args) > 0 {
 			branch = args[0]
 		} else if ui.IsInteractive() {
-			localBranches, err := git.ListAllBranches(pc.BarePath)
+			// For branch listing we need a git repo path.
+			// In worktree mode use .bare; in CoW mode use the default-branch workspace.
+			var gitRefPath string
+			if pc.Mode == workspace.ModeCow {
+				gitRefPath = filepath.Join(pc.ProjectPath, pc.DefaultBranch)
+			} else {
+				gitRefPath = pc.BarePath
+			}
+
+			localBranches, err := git.ListAllBranches(gitRefPath)
 			if err != nil {
 				return fmt.Errorf("listing local branches: %w", err)
 			}
 
-			remoteBranches, _ := git.ListRemoteBranches(pc.BarePath)
+			remoteBranches, _ := git.ListRemoteBranches(gitRefPath)
 
-			selected, err := ui.SelectBranchInteractive(pc.BarePath, localBranches, remoteBranches)
+			selected, err := ui.SelectBranchInteractive(gitRefPath, localBranches, remoteBranches)
 			if err != nil {
 				return fmt.Errorf("selecting branch: %w", err)
 			}
@@ -69,7 +79,14 @@ available branches or entering a new branch name.`,
 			remote := branch[:idx]
 			localBranch := branch[idx+1:]
 			// Only treat it as a remote ref when the prefix matches a known remote.
-			remotes, _ := git.ListRemotes(pc.BarePath)
+			// In worktree mode use .bare; in CoW mode use the default-branch workspace.
+			var gitRefPath string
+			if pc.Mode == workspace.ModeCow {
+				gitRefPath = filepath.Join(pc.ProjectPath, pc.DefaultBranch)
+			} else {
+				gitRefPath = pc.BarePath
+			}
+			remotes, _ := git.ListRemotes(gitRefPath)
 			for _, r := range remotes {
 				if r == remote {
 					if baseBranch == "" {
@@ -97,34 +114,32 @@ available branches or entering a new branch name.`,
 			return fmt.Errorf("getting absolute path: %w", err)
 		}
 
-		exists := git.BranchExists(pc.BarePath, branch)
-		if exists {
-			worktrees, err := git.ListWorktrees(pc.BarePath)
-			if err != nil {
-				return fmt.Errorf("listing worktrees: %w", err)
-			}
-			for _, wt := range worktrees {
-				if wt.Branch == branch {
-					ui.PrintInfo(fmt.Sprintf("Worktree already exists at %s", wt.Path))
-					return nil
-				}
+		// Check whether a workspace already exists for this branch
+		existingWorkspaces, err := pc.WorkspaceManager().ListWorkspaces()
+		if err != nil {
+			return fmt.Errorf("listing workspaces: %w", err)
+		}
+		for _, ws := range existingWorkspaces {
+			if ws.Branch == branch {
+				ui.PrintInfo(fmt.Sprintf("Workspace already exists at %s", ws.Path))
+				return nil
 			}
 		}
 
-		ui.PrintStep(fmt.Sprintf("Creating worktree for branch '%s' from '%s'", branch, baseBranch))
+		ui.PrintStep(fmt.Sprintf("Creating workspace for branch '%s' from '%s'", branch, baseBranch))
 		ui.PrintInfo(fmt.Sprintf("Path: %s", absWorktreePath))
 
 		if !dryRun {
-			if err := git.CreateWorktree(pc.BarePath, absWorktreePath, branch, baseBranch); err != nil {
-				return fmt.Errorf("creating worktree: %w", err)
+			if _, err := pc.WorkspaceManager().CreateWorkspace(branch, baseBranch, absWorktreePath); err != nil {
+				return fmt.Errorf("creating workspace: %w", err)
 			}
 		} else {
-			ui.PrintInfo("[DRY RUN] Would create worktree")
+			ui.PrintInfo("[DRY RUN] Would create workspace")
 		}
 
-		// Set up branch tracking unless --no-track is specified
+		// Set up branch tracking for worktree mode only (CoW clones track independently)
 		noTrack := mustGetBool(cmd, "no-track")
-		if !dryRun && !noTrack {
+		if !dryRun && !noTrack && pc.Mode == workspace.ModeWorktree {
 			if err := git.SetBranchUpstream(pc.BarePath, branch, "origin"); err != nil {
 				// Non-fatal - just inform user if verbose
 				if verbose {

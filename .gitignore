@@ -7,3 +7,6 @@
 # Ignore built binary
 arbor
 arbor.exe
+
+# Ignore local workspace state (per-workspace runtime state, never committed)
+.arbor.local

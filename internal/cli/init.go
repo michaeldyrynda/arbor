@@ -3,7 +3,9 @@ package cli
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
@@ -51,6 +53,85 @@ Arguments:
 		absPath, err := filepath.Abs(path)
 		if err != nil {
 			return fmt.Errorf("getting absolute path: %w", err)
+		}
+
+		// Determine workspace mode (flag → interactive → default)
+		modeFlag := mustGetString(cmd, "mode")
+		wsMode, err := determineWorkspaceMode(modeFlag)
+		if err != nil {
+			return err
+		}
+
+		// CoW init path — diverges from the traditional worktree flow
+		if wsMode == "cow" {
+			repoName := utils.SanitisePath(utils.ExtractRepoName(repo))
+			siteName := utils.SanitisePath(filepath.Base(path))
+
+			defaultBranch, err := detectDefaultBranchFromRemote(repo)
+			if err != nil {
+				defaultBranch = "main"
+			}
+
+			if err := performCowInit(repo, absPath, defaultBranch, siteName); err != nil {
+				return err
+			}
+
+			mainPath := filepath.Join(absPath, defaultBranch)
+			cfg, _ := config.LoadProject(absPath)
+			if cfg == nil {
+				cfg = &config.Config{
+					SiteName:      siteName,
+					DefaultBranch: defaultBranch,
+					WorkspaceMode: "cow",
+				}
+			}
+
+			verbose := mustGetBool(cmd, "verbose")
+			quiet := mustGetBool(cmd, "quiet")
+			skipScaffold := mustGetBool(cmd, "skip-scaffold")
+
+			if !skipScaffold {
+				presetManager := presets.NewManager()
+				scaffoldManager := scaffold.NewScaffoldManager()
+				presets.RegisterAllWithScaffold(scaffoldManager)
+
+				preset := mustGetString(cmd, "preset")
+				if preset == "" {
+					preset = presetManager.Detect(mainPath)
+					if preset != "" {
+						cfg.Preset = preset
+					}
+				} else {
+					cfg.Preset = preset
+				}
+
+				// Persist the detected/specified preset so subsequent commands (e.g. arbor
+				// scaffold, arbor work) know which preset to use.
+				if cfg.Preset != "" {
+					if err := config.SaveProject(absPath, cfg); err != nil {
+						ui.PrintWarning(fmt.Sprintf("Could not save preset to config: %v", err))
+					}
+				}
+
+				promptMode := types.PromptMode{
+					Interactive:   ui.IsInteractive(),
+					NoInteractive: false,
+					Force:         false,
+					CI:            os.Getenv("CI") != "",
+				}
+				if err := scaffoldManager.RunScaffold(mainPath, defaultBranch, repoName, siteName, cfg.Preset, cfg, "", promptMode, false, verbose, quiet); err != nil {
+					ui.PrintErrorWithHint("Scaffold steps failed", err.Error())
+				}
+			}
+
+			if !quiet {
+				checkArborLocalGitignore(mainPath)
+			}
+
+			ui.PrintDone("Repository ready (copy-on-write mode)!")
+			ui.PrintInfo(fmt.Sprintf("cd %s", absPath))
+			ui.PrintInfo("arbor work feature/my-feature")
+			return nil
 		}
 
 		ghAvailable := isCommandAvailable("gh")
@@ -178,6 +259,30 @@ func init() {
 	initCmd.Flags().String("preset", "", "Project preset (laravel, php)")
 	initCmd.Flags().Bool("skip-scaffold", false, "Skip scaffold steps during init")
 	initCmd.Flags().Bool("use-repo-config", true, "Automatically use repository config (non-interactive, default: true)")
+	initCmd.Flags().String("mode", "", "Workspace mode: worktree or cow (copy-on-write)")
+}
+
+// detectDefaultBranchFromRemote clones the repository temporarily to determine
+// the default branch, then returns it. Falls back to "main" on error.
+// For local paths, it uses git directly.
+func detectDefaultBranchFromRemote(repoURL string) (string, error) {
+	cmd := exec.Command("git", "ls-remote", "--symref", repoURL, "HEAD")
+	output, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("ls-remote failed: %w", err)
+	}
+
+	// Output format: "ref: refs/heads/<branch>\tHEAD"
+	lines := strings.Split(string(output), "\n")
+	for _, line := range lines {
+		if strings.HasPrefix(line, "ref: refs/heads/") {
+			branch := strings.TrimPrefix(line, "ref: refs/heads/")
+			branch = strings.Fields(branch)[0] // strip trailing \tHEAD
+			return branch, nil
+		}
+	}
+
+	return "", fmt.Errorf("could not determine default branch from remote")
 }
 
 // checkAndCopyRepoConfig checks for arbor.yaml in the repository and prompts to copy it.

@@ -38,6 +38,7 @@ type Config struct {
 	SiteName      string                `mapstructure:"site_name"`
 	Preset        string                `mapstructure:"preset"`
 	DefaultBranch string                `mapstructure:"default_branch"`
+	WorkspaceMode string                `mapstructure:"workspace_mode"`
 	Scaffold      ScaffoldConfig        `mapstructure:"scaffold"`
 	Cleanup       CleanupConfig         `mapstructure:"cleanup"`
 	Tools         map[string]ToolConfig `mapstructure:"tools"`
@@ -372,6 +373,9 @@ func SaveProject(path string, config *Config) error {
 	}
 	if config.DefaultBranch != "" {
 		setValue("default_branch", config.DefaultBranch)
+	}
+	if config.WorkspaceMode != "" {
+		setValue("workspace_mode", config.WorkspaceMode)
 	}
 
 	// Update sync config if any values are set

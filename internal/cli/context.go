@@ -12,18 +12,21 @@ import (
 	"github.com/artisanexperiences/arbor/internal/presets"
 	"github.com/artisanexperiences/arbor/internal/scaffold"
 	"github.com/artisanexperiences/arbor/internal/scaffold/steps"
+	"github.com/artisanexperiences/arbor/internal/workspace"
 )
 
 type ProjectContext struct {
 	CWD           string
+	Mode          string // workspace.ModeWorktree or workspace.ModeCow
 	BarePath      string
 	ProjectPath   string
 	Config        *config.Config
 	DefaultBranch string
 
-	presetManager   *presets.Manager
-	scaffoldManager *scaffold.ScaffoldManager
-	managersInit    sync.Once
+	presetManager    *presets.Manager
+	scaffoldManager  *scaffold.ScaffoldManager
+	workspaceManager *workspace.Manager
+	managersInit     sync.Once
 }
 
 func OpenProjectFromCWD() (*ProjectContext, error) {
@@ -32,12 +35,12 @@ func OpenProjectFromCWD() (*ProjectContext, error) {
 		return nil, fmt.Errorf("getting current directory: %w", err)
 	}
 
-	barePath, err := git.FindBarePath(cwd)
+	info, err := workspace.FindProjectRoot(cwd)
 	if err != nil {
-		return nil, fmt.Errorf("finding bare repository: %w", err)
+		return nil, fmt.Errorf("finding arbor project: %w", err)
 	}
 
-	projectPath := filepath.Dir(barePath)
+	projectPath := info.ProjectRoot
 	cfg, err := config.LoadProject(projectPath)
 	if err != nil {
 		return nil, fmt.Errorf("loading project config: %w", err)
@@ -45,7 +48,12 @@ func OpenProjectFromCWD() (*ProjectContext, error) {
 
 	defaultBranch := cfg.DefaultBranch
 	if defaultBranch == "" {
-		defaultBranch, _ = git.GetDefaultBranch(barePath)
+		switch info.Mode {
+		case workspace.ModeWorktree:
+			defaultBranch, _ = git.GetDefaultBranch(info.BarePath)
+		case workspace.ModeCow:
+			// Fall back to "main"; cfg.DefaultBranch from arbor.yaml takes precedence above.
+		}
 		if defaultBranch == "" {
 			defaultBranch = config.DefaultBranch
 		}
@@ -53,7 +61,8 @@ func OpenProjectFromCWD() (*ProjectContext, error) {
 
 	return &ProjectContext{
 		CWD:           cwd,
-		BarePath:      barePath,
+		Mode:          info.Mode,
+		BarePath:      info.BarePath,
 		ProjectPath:   projectPath,
 		Config:        cfg,
 		DefaultBranch: defaultBranch,
@@ -61,33 +70,33 @@ func OpenProjectFromCWD() (*ProjectContext, error) {
 }
 
 func (pc *ProjectContext) IsInWorktree() bool {
-	// Check if .bare exists in parent hierarchy
-	barePath, err := git.FindBarePath(pc.CWD)
-	if err != nil {
-		return false
-	}
-
-	// Check if CWD is inside a worktree directory (not the project root)
-	projectPath := filepath.Dir(barePath)
-
-	// If CWD equals project path, we're in the project root, not a worktree
 	cwdAbs, err := filepath.Abs(pc.CWD)
 	if err != nil {
 		return false
 	}
 
-	projectAbs, err := filepath.Abs(projectPath)
+	projectAbs, err := filepath.Abs(pc.ProjectPath)
 	if err != nil {
 		return false
 	}
 
-	// If we're in the project root or its direct child .bare, we're not in a worktree
-	if cwdAbs == projectAbs || cwdAbs == filepath.Join(projectAbs, ".bare") {
+	// At project root — not a workspace
+	if cwdAbs == projectAbs {
 		return false
 	}
 
-	// We're somewhere under the project root but not the root itself
-	// Check if we're actually in a worktree by seeing if CWD is within a worktree path
+	// Inside the mode-specific internal directory — not a workspace
+	switch pc.Mode {
+	case workspace.ModeWorktree:
+		if cwdAbs == filepath.Join(projectAbs, ".bare") {
+			return false
+		}
+	case workspace.ModeCow:
+		if cwdAbs == filepath.Join(projectAbs, ".arbor") {
+			return false
+		}
+	}
+
 	return true
 }
 
@@ -112,6 +121,13 @@ func (pc *ProjectContext) ScaffoldManager() *scaffold.ScaffoldManager {
 	return pc.scaffoldManager
 }
 
+func (pc *ProjectContext) WorkspaceManager() *workspace.Manager {
+	pc.managersInit.Do(func() {
+		pc.initManagers()
+	})
+	return pc.workspaceManager
+}
+
 func (pc *ProjectContext) initManagers() {
 	// Create explicit step registry with default steps
 	stepRegistry := steps.NewRegistry()
@@ -121,4 +137,16 @@ func (pc *ProjectContext) initManagers() {
 	pc.presetManager = presets.NewManager()
 	pc.scaffoldManager = scaffold.NewScaffoldManagerWithRegistry(stepRegistry)
 	presets.RegisterAllWithScaffold(pc.scaffoldManager)
+
+	// Determine workspace mode from config, defaulting to worktree
+	wsMode := pc.Config.WorkspaceMode
+	if wsMode == "" {
+		wsMode = workspace.ModeWorktree
+	}
+
+	pc.workspaceManager = workspace.NewManager(&workspace.ProjectInfo{
+		Mode:        wsMode,
+		ProjectRoot: pc.ProjectPath,
+		BarePath:    pc.BarePath,
+	}, pc.DefaultBranch)
 }

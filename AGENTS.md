@@ -37,12 +37,27 @@ arbor remove feature-my-feature  # When done
 | CLI commands | `internal/cli/` |
 | Config management | `internal/config/` |
 | Git operations | `internal/git/` |
+| **Workspace abstraction** | `internal/workspace/` |
 | Scaffold system | `internal/scaffold/` |
 | Presets | `internal/presets/` |
 | Utilities | `internal/utils/` |
 | Entry point | `cmd/arbor/main.go` |
 | Tests | Alongside implementation files (`*_test.go`) |
 | Deployment plans | `.ai/plans/` |
+
+### Workspace Architecture
+
+Arbor supports two workspace modes, abstracted by `internal/workspace/`:
+
+| | Worktree Mode | CoW Mode |
+|-|---------------|----------|
+| Project marker | `.bare/` | `.arbor/` |
+| Main workspace | git worktree | normal clone |
+| Feature workspaces | git worktrees | CoW clones (`cp -c` / `cp --reflink`) |
+| Config field | `workspace_mode: worktree` (or absent) | `workspace_mode: cow` |
+| Disk sharing | git object store | filesystem reflinks |
+
+The `internal/workspace.Manager` type provides a mode-agnostic API used by all CLI commands. `FindProjectRoot()` searches for `.bare/` (worktree mode) or `.arbor/` (CoW mode) in parent directories.
 
 ### Config Files
 
@@ -194,7 +209,7 @@ This approach ensures:
 
 ## Current Phase
 
-**Phase 5: Distribution** - Complete
+**Phase 6: Copy-on-Write Workspace Mode** - Complete
 
 All phases 1-5 are complete. The project has:
 - Core infrastructure (worktree management, config)

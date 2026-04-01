@@ -10,14 +10,15 @@ import (
 	"github.com/artisanexperiences/arbor/internal/git"
 	"github.com/artisanexperiences/arbor/internal/scaffold/types"
 	"github.com/artisanexperiences/arbor/internal/ui"
+	"github.com/artisanexperiences/arbor/internal/workspace"
 )
 
 var pruneCmd = &cobra.Command{
 	Use:   "prune",
-	Short: "Remove merged worktrees",
-	Long: `Removes merged worktrees automatically.
+	Short: "Remove merged workspaces",
+	Long: `Removes merged workspaces automatically.
 
-Lists all worktrees, identifies merged ones, and provides an
+Lists all workspaces, identifies merged ones, and provides an
 interactive review before removal.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		pc, err := OpenProjectFromCWD()
@@ -30,9 +31,21 @@ interactive review before removal.`,
 		verbose := mustGetBool(cmd, "verbose")
 		quiet := mustGetBool(cmd, "quiet")
 
-		worktrees, err := git.ListWorktrees(pc.BarePath)
+		wsManager := pc.WorkspaceManager()
+		workspaces, err := wsManager.ListWorkspaces()
 		if err != nil {
-			return fmt.Errorf("listing worktrees: %w", err)
+			return fmt.Errorf("listing workspaces: %w", err)
+		}
+
+		// Convert to git.Worktree for existing UI functions
+		worktrees := workspacesToGitWorktrees(workspaces)
+
+		// Determine the git repo path used for merge checks once, based on mode.
+		var mergeCheckPath string
+		if pc.Mode == workspace.ModeCow {
+			mergeCheckPath = filepath.Join(pc.ProjectPath, pc.DefaultBranch)
+		} else {
+			mergeCheckPath = pc.BarePath
 		}
 
 		var removable []git.Worktree
@@ -43,7 +56,7 @@ interactive review before removal.`,
 				continue
 			}
 
-			merged, err := git.IsMerged(pc.BarePath, wt.Branch, pc.DefaultBranch)
+			merged, err := git.IsMerged(mergeCheckPath, wt.Branch, pc.DefaultBranch)
 			if err != nil {
 				ui.PrintErrorWithHint(fmt.Sprintf("Error checking %s", wt.Branch), err.Error())
 				continue
@@ -58,11 +71,11 @@ interactive review before removal.`,
 		}
 
 		if len(removable) == 0 {
-			ui.PrintDone("No merged worktrees to remove.")
+			ui.PrintDone("No merged workspaces to remove.")
 			return nil
 		}
 
-		ui.PrintInfo(fmt.Sprintf("%d merged worktree(s) found.", len(removable)))
+		ui.PrintInfo(fmt.Sprintf("%d merged workspace(s) found.", len(removable)))
 
 		var toRemove []git.Worktree
 		if force {
@@ -70,12 +83,12 @@ interactive review before removal.`,
 		} else {
 			selected, err := ui.SelectWorktreesToPrune(removable)
 			if err != nil {
-				return fmt.Errorf("selecting worktrees: %w", err)
+				return fmt.Errorf("selecting workspaces: %w", err)
 			}
 			toRemove = selected
 
 			if len(toRemove) == 0 {
-				ui.PrintInfo("No worktrees selected for removal.")
+				ui.PrintInfo("No workspaces selected for removal.")
 				return nil
 			}
 
@@ -84,12 +97,12 @@ interactive review before removal.`,
 				return fmt.Errorf("confirmation: %w", err)
 			}
 			if !confirmed {
-				ui.PrintInfo("No worktrees removed.")
+				ui.PrintInfo("No workspaces removed.")
 				return nil
 			}
 		}
 
-		ui.PrintInfo(fmt.Sprintf("Removing %d worktree(s):", len(toRemove)))
+		ui.PrintInfo(fmt.Sprintf("Removing %d workspace(s):", len(toRemove)))
 		for _, wt := range toRemove {
 			ui.PrintSuccessPath("Removed", wt.Path)
 		}
@@ -114,7 +127,7 @@ interactive review before removal.`,
 					ui.PrintErrorWithHint("Cleanup failed", err.Error())
 				}
 
-				if err := git.RemoveWorktree(wt.Path, true); err != nil {
+				if err := wsManager.RemoveWorkspace(wt.Path, true); err != nil {
 					ui.PrintErrorWithHint(fmt.Sprintf("Error removing %s", wt.Branch), err.Error())
 				}
 			} else {

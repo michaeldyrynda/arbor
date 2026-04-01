@@ -5,6 +5,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
+
+	"github.com/artisanexperiences/arbor/internal/workspace"
 )
 
 func evalSymlinks(path string) string {
@@ -143,8 +145,11 @@ func TestProjectContext_IsInWorktree(t *testing.T) {
 	t.Run("returns false for non-worktree directory", func(t *testing.T) {
 		tmpDir := t.TempDir()
 
+		// ProjectPath == CWD → at project root, not inside a workspace
 		pc := &ProjectContext{
-			CWD: tmpDir,
+			Mode:        workspace.ModeWorktree,
+			CWD:         tmpDir,
+			ProjectPath: tmpDir,
 		}
 
 		if pc.IsInWorktree() {
@@ -153,10 +158,13 @@ func TestProjectContext_IsInWorktree(t *testing.T) {
 	})
 
 	t.Run("returns true for worktree directory", func(t *testing.T) {
-		worktreePath, _ := createTestWorktree(t)
+		worktreePath, barePath := createTestWorktree(t)
+		projectRoot := filepath.Dir(barePath)
 
 		pc := &ProjectContext{
-			CWD: worktreePath,
+			Mode:        workspace.ModeWorktree,
+			CWD:         worktreePath,
+			ProjectPath: projectRoot,
 		}
 
 		if !pc.IsInWorktree() {
@@ -169,7 +177,9 @@ func TestProjectContext_IsInWorktree(t *testing.T) {
 		projectRoot := filepath.Dir(barePath)
 
 		pc := &ProjectContext{
-			CWD: projectRoot,
+			Mode:        workspace.ModeWorktree,
+			CWD:         projectRoot,
+			ProjectPath: projectRoot,
 		}
 
 		if pc.IsInWorktree() {
@@ -185,9 +195,12 @@ func TestProjectContext_IsInWorktree(t *testing.T) {
 
 	t.Run("returns false for .bare directory itself", func(t *testing.T) {
 		_, barePath := createTestWorktree(t)
+		projectRoot := filepath.Dir(barePath)
 
 		pc := &ProjectContext{
-			CWD: barePath,
+			Mode:        workspace.ModeWorktree,
+			CWD:         barePath,
+			ProjectPath: projectRoot,
 		}
 
 		if pc.IsInWorktree() {
@@ -199,8 +212,11 @@ func TestProjectContext_IsInWorktree(t *testing.T) {
 func TestProjectContext_MustBeInWorktree(t *testing.T) {
 	tmpDir := t.TempDir()
 
+	// ProjectPath == CWD → at project root, not inside a workspace
 	pc := &ProjectContext{
-		CWD: tmpDir,
+		Mode:        workspace.ModeWorktree,
+		CWD:         tmpDir,
+		ProjectPath: tmpDir,
 	}
 
 	err := pc.MustBeInWorktree()
@@ -208,9 +224,11 @@ func TestProjectContext_MustBeInWorktree(t *testing.T) {
 		t.Error("MustBeInWorktree() = nil, want error for non-worktree directory")
 	}
 
-	worktreePath, _ := createTestWorktree(t)
+	worktreePath, barePath := createTestWorktree(t)
+	projectRoot := filepath.Dir(barePath)
 
 	pc.CWD = worktreePath
+	pc.ProjectPath = projectRoot
 	err = pc.MustBeInWorktree()
 	if err != nil {
 		t.Errorf("MustBeInWorktree() = %v, want nil for worktree directory", err)

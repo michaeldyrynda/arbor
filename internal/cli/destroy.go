@@ -16,15 +16,16 @@ import (
 	"github.com/artisanexperiences/arbor/internal/scaffold/steps"
 	"github.com/artisanexperiences/arbor/internal/scaffold/types"
 	"github.com/artisanexperiences/arbor/internal/ui"
+	"github.com/artisanexperiences/arbor/internal/workspace"
 )
 
 var destroyCmd = &cobra.Command{
 	Use:   "destroy [PROJECT_PATH]",
 	Short: "Completely destroy an arbor project",
 	Long: `Destroys an arbor project by:
-  1. Finding all worktrees
+  1. Finding all workspaces
   2. Running cleanup for each (features first, then main)
-  3. Removing all worktrees and branches
+  3. Removing all workspaces and branches
   4. Deleting the project folder
 
 This operation cannot be undone.`,
@@ -68,16 +69,26 @@ This operation cannot be undone.`,
 			return fmt.Errorf("not an arbor project: %w", err)
 		}
 
-		barePath := filepath.Join(absProjectPath, ".bare")
-		if _, err := os.Stat(barePath); err != nil {
-			return fmt.Errorf("project missing .bare folder: %w", err)
+		// Determine mode and barePath
+		info, err := workspace.FindProjectRoot(absProjectPath)
+		if err != nil {
+			return fmt.Errorf("finding project root: %w", err)
 		}
 
-		worktrees, err := git.ListWorktrees(barePath)
-		if err != nil {
-			return fmt.Errorf("listing worktrees: %w", err)
+		defaultBranch := cfg.DefaultBranch
+		if defaultBranch == "" {
+			defaultBranch = "main"
 		}
-		worktrees = sortWorktreesForDestroy(worktrees, cfg.DefaultBranch)
+
+		wsManager := workspace.NewManager(info, defaultBranch)
+
+		workspaces, err := wsManager.ListWorkspaces()
+		if err != nil {
+			return fmt.Errorf("listing workspaces: %w", err)
+		}
+
+		worktrees := workspacesToGitWorktrees(workspaces)
+		worktrees = sortWorktreesForDestroy(worktrees, defaultBranch)
 
 		projectName := cfg.SiteName
 		if projectName == "" {
@@ -96,7 +107,7 @@ This operation cannot be undone.`,
 		}
 
 		if dryRun {
-			ui.PrintInfo(fmt.Sprintf("Would destroy project %q with %d worktrees:", projectName, len(worktrees)))
+			ui.PrintInfo(fmt.Sprintf("Would destroy project %q with %d workspace(s):", projectName, len(worktrees)))
 			for _, wt := range worktrees {
 				ui.PrintInfo(fmt.Sprintf("  - %s", wt.Branch))
 			}
@@ -121,7 +132,7 @@ This operation cannot be undone.`,
 			CI:            os.Getenv("CI") != "",
 		}
 		for _, wt := range worktrees {
-			ui.PrintStep("Removing worktree: " + wt.Branch)
+			ui.PrintStep("Removing workspace: " + wt.Branch)
 
 			wtPreset := preset
 			if wtPreset == "" {
@@ -130,10 +141,10 @@ This operation cannot be undone.`,
 
 			if wtPreset != "" {
 				siteName := filepath.Base(wt.Path)
-				if wt.Branch == cfg.DefaultBranch && cfg.SiteName != "" {
+				if wt.Branch == defaultBranch && cfg.SiteName != "" {
 					siteName = cfg.SiteName
 				}
-				if err := scaffoldManager.RunCleanup(wt.Path, wt.Branch, repoName, siteName, wtPreset, cfg, barePath, promptMode, false, verbose, quiet); err != nil {
+				if err := scaffoldManager.RunCleanup(wt.Path, wt.Branch, repoName, siteName, wtPreset, cfg, info.BarePath, promptMode, false, verbose, quiet); err != nil {
 					ui.PrintWarning(fmt.Sprintf("Cleanup failed for %s: %v", wt.Branch, err))
 				} else {
 					allCleanupFailed = false
@@ -142,12 +153,15 @@ This operation cannot be undone.`,
 				allCleanupFailed = false
 			}
 
-			if err := git.RemoveWorktree(wt.Path, true); err != nil {
-				ui.PrintWarning(fmt.Sprintf("Failed to remove worktree %s: %v", wt.Branch, err))
+			if err := wsManager.RemoveWorkspace(wt.Path, true); err != nil {
+				ui.PrintWarning(fmt.Sprintf("Failed to remove workspace %s: %v", wt.Branch, err))
 			}
 
-			if err := git.DeleteBranch(barePath, wt.Branch, true); err != nil {
-				ui.PrintWarning(fmt.Sprintf("Failed to delete branch %s: %v", wt.Branch, err))
+			// Branch deletion: only in worktree mode (CoW clones own their branches)
+			if info.Mode == workspace.ModeWorktree {
+				if err := git.DeleteBranch(info.BarePath, wt.Branch, true); err != nil {
+					ui.PrintWarning(fmt.Sprintf("Failed to delete branch %s: %v", wt.Branch, err))
+				}
 			}
 
 			ui.PrintSuccess(fmt.Sprintf("Removed %s", wt.Branch))
@@ -158,8 +172,11 @@ This operation cannot be undone.`,
 			return fmt.Errorf("all cleanup operations failed")
 		}
 
-		if err := git.PruneWorktrees(barePath); err != nil {
-			ui.PrintWarning(fmt.Sprintf("Failed to prune worktrees: %v", err))
+		// Prune stale worktree refs: only applicable in worktree mode
+		if info.Mode == workspace.ModeWorktree {
+			if err := git.PruneWorktrees(info.BarePath); err != nil {
+				ui.PrintWarning(fmt.Sprintf("Failed to prune worktrees: %v", err))
+			}
 		}
 
 		ui.PrintStep("Deleting project folder...")
